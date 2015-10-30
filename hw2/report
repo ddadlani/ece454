@@ -1,0 +1,11 @@
+Divya Dadlani : 999181772
+Geetika Saksena : 998672191
+
+Our final version of the rotate function contains the following optimizations:
+- Tiling with 32 block size 
+- Switched inner loop (switched block_i, block_j)
+- Switched outer loop (moved i loop inside j loop)
+- Unrolled 2 inner loops
+
+Since we used tiling, we have two additional inner loops that traverse the tile. We switched block_i and block_j such that the tiles of the src array are traversed from left to right, thereby taking advantage of spatial locality in cache. The dst array is also traversed using tiles. These tiles are traversed from bottom to top, however this is not an issue since the dst array is only written to, and read misses have a higher penalty than write misses. Thus, the optimization of the src array over the dst increases the overall optimization of the method.
+We also used loop unrolling for the two inner loops. As a result, the number of additions after the loop iterations were halved. We selected a tile size of 32 after trial and error as it gave the maximum speedup.  

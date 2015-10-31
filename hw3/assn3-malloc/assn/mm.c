@@ -64,26 +64,49 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
+
+/* Given free block ptr fbp, compute address of next and previous blocks
+ * of that fit in the free list
+ */
+#define NEXT_FREE_BLKP(fbp) (*(void **) fbp)
+#define PREV_FREE_BLKP(fbp) (*(void **) (fbp+WSIZE))
+
+#define SET_NEXT_FREE_BLKP(newfbp, fbp) (PUT(newfbp, fbp))
+#define FREE_LIST_SIZE 11
+#define INITIAL_HEAP_SIZE 512
+
 void* heap_listp = NULL;
 
+// Number of double words currently in the heap
+int heap_length = INITIAL_HEAP_SIZE;
+
+
 // Segregated free list
-uintptr_t free_lists[10];
+// each element of the free_list contains 2^i double-word sized blocks
+// last element contains all blocks larger than 512 dwords
+void *free_lists[FREE_LIST_SIZE];
+unsigned int num_free_blocks[FREE_LIST_SIZE];
+
+int get_array_position(unsigned int num_words);
+
 
 /**********************************************************
  * mm_init
  * Initialize the heap, including "allocation" of the
- * prologue and epilogue
+ * prologue and epilogue. At initialization, we create
+ * one heap block of size INITIAL_HEAP_SIZE, which is
+ * the block size held in the second last element of
+ * free_lists.
  **********************************************************/
  int mm_init(void)
  {
-	// Number of double words currently in the heap
-	int heap_length = 512;
-	if ((heap_listp = mem_sbrk((heap_length+1)*DSIZE)) == (void *) -1)
+
+	if ((heap_listp = mem_sbrk((heap_length+2)*DSIZE)) == (void *) -1)
 		return -1;
 
 	//  ___________________________________
 	// |0|S|__________FREE BLOCK___________|S|0|
-	//  W <--------heap_len * dsize---------> W
+	//  W W <------heap_len * dsize-------> W W
 
 	// alignment
 	PUT(heap_listp, 0);
@@ -100,9 +123,11 @@ uintptr_t free_lists[10];
 	int i;
 	for (i = 0; i < 10; i++) {
 		free_lists[i] = 0;
+		num_free_blocks[i] = 0;
 	}
 
-	free_lists[9] = (uintptr_t) heap_listp;
+	free_lists[9] = heap_listp;
+	num_free_blocks[9] = 1;
 	return 0;
  }
 
@@ -166,7 +191,7 @@ void *extend_heap(size_t words)
     /* Initialize free block header/footer and the epilogue header */
     PUT(HDRP(bp), PACK(size, 0));                // free block header
     PUT(FTRP(bp), PACK(size, 0));                // free block footer
-    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));        // new epilogue header
+//    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));        // new epilogue header
 
     /* Coalesce if the previous block was free */
     return coalesce(bp);
@@ -181,25 +206,54 @@ void *extend_heap(size_t words)
  **********************************************************/
 void * find_fit(size_t asize)
 {
-//    void *bp;
-//    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
-//    {
-//        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp))))
-//        {
-//            return bp;
-//        }
-//    }
-//    return NULL;
-//	int size = asize;
-//	int i;
-//	// check if power of 2
-//	int is_powerof2 = asize && !(asize & (asize - 1));
-//	// find power of 2
-//	while (size >>= 1) // unroll for more speed...
-//	{
-//	  i++;
-//	}
- return NULL;
+
+	printf("Entered find fit.\n");
+	// Divide by DSIZE (which is 16 bytes)
+	unsigned int num_dwords = asize >> 4;
+	int free_list_index = get_array_position(num_dwords);
+
+	if (free_list_index == FREE_LIST_SIZE - 1) {
+		// look in the largest block range to find a fit
+		void *best_fit_blkp = NULL;
+		void *cur_blkp = free_lists[free_list_index];
+		int best_fit, cur_fit;
+
+		while(cur_blkp != NULL) {
+			cur_fit = GET_SIZE(HDRP(cur_blkp)) - asize;
+			if (cur_fit == 0) {
+				// found the exact fit
+				best_fit_blkp = cur_blkp;
+				best_fit = 0;
+				break;
+			}
+			else if (cur_fit > 0) {
+				if ((best_fit_blkp == NULL) || (cur_fit < best_fit)) {
+					// we don't have a previous best fit or this fit is better than our previous best fit
+					best_fit_blkp = cur_blkp;
+					best_fit = cur_fit;
+				}
+			}
+			cur_blkp = NEXT_FREE_BLKP(cur_blkp);
+		}
+		// found a good fit. If not, will extend heap below
+		if (best_fit_blkp != NULL) {
+			printf("Found best_fit blkp, leaving find fit.\n");
+			return best_fit_blkp;
+		}
+	} else {
+		while (free_list_index < FREE_LIST_SIZE) {
+			void *memblk = (unsigned int *) free_lists[free_list_index];
+			if (memblk == NULL) {
+				free_list_index++;
+			} else {
+				free_lists[free_list_index] = NEXT_FREE_BLKP(memblk);
+				printf("Found memblkp, leaving find fit.\n");
+				return memblk;
+			}
+		}
+	}
+	printf("Found nothing, leaving find fit.\n");
+	return NULL;
 }
 
 /**********************************************************
@@ -241,6 +295,7 @@ void mm_free(void *bp)
  **********************************************************/
 void *mm_malloc(size_t size)
 {
+	// return (num_dwords <= INITIAL_HEAP_SIZE) ? extend_heap(INITIAL_HEAP_SIZE * 2) : extend_heap(num_dwords * 2);
     size_t asize; /* adjusted block size */
     size_t extendsize; /* amount to extend heap if no fit */
     char * bp;
@@ -254,9 +309,31 @@ void *mm_malloc(size_t size)
         asize = 2 * DSIZE;
     else
         asize = DSIZE * ((size + (DSIZE) + (DSIZE-1))/ DSIZE);
-
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
+        // TRIM
+    	unsigned int split_size = GET_SIZE(HDRP(bp)) - asize;
+    	int array_pos = -1;
+    	while (split_size >= 0) {
+    		// get closest fit index
+    		array_pos = get_array_position(split_size) - 1;
+    		int partition_size = get_power_of_2(array_pos);
+    		// set header and footer
+    		void *partition_bp = bp + size - WSIZE;
+    		PUT(partition_bp, PACK(partition_size * DSIZE, 0));
+    		PUT(partition_bp + partition_size*DSIZE - WSIZE, PACK(partition_size * DSIZE, 0));
+
+    		SET_NEXT_FREE_BLKP(partition_bp, free_lists[array_pos]);
+    		// add free block to list
+
+    		split_size = split_size - get_power_of_2(array_pos);
+
+    		 //= bp + asize - WSIZE;
+
+    	}
+    	if ( )
+        int pos = get_array_pos(asize + DSIZE);
+        //
         place(bp, asize);
         return bp;
     }
@@ -309,36 +386,59 @@ void *mm_realloc(void *ptr, size_t size)
  *********************************************************/
 int mm_check(void){
 
-//	uintptr_t curblk = heap_listp;
-//
-//	// check if all free blocks are in the free list array
-//	while (curblk != NULL) {
-//		size_t size = GET_SIZE(HDRP(curblk));
-//		size_t alloc = GET_ALLOC(HDRP(curblk));
-//		if (alloc) {
-//
-//		}
-//
+	void * cur_blkp = heap_listp;
+
+	// check if all free blocks are in the free list array
+	while (cur_blkp != NULL) {
+		size_t size = GET_SIZE(HDRP(cur_blkp));
+		size_t alloc = GET_ALLOC(HDRP(cur_blkp));
+		if (alloc) {
+			// add these checks later
+		}
+		else {
+			if (__builtin_popcount((unsigned int) size) > 1) {
+				// size is not a power of 2
+				return 0;
+			}
+			void *head = free_lists[get_array_position(size)];
+			while (head != NULL) {
+				if (head == cur_blkp)
+					break;
+				else {
+					// address of next free block in linked list should
+					// be located at head
+//					unsigned int temp = (uintptr_t) head;
+					head = *(void**) head;
+				}
+			}
+			// head was not found in the linked list at free_lists[i]
+			if (head == NULL)
+				return 0;
+		}
+		cur_blkp = NEXT_BLKP(cur_blkp);
+	}
+	// all blocks correctly accounted for
+	return 1;
+}
 //		else {
 //			int largest_blk = 1024; // max free block size in our array
 //			int powers_of_2 = 1;
 //			int size_ = size;
 //			int i = 0;
-//
-//			if (p)
-//			// verify if free block size is a power of 2
+
+			// verify if free block size is a power of 2
 //			while(powers_of_2 <= 1024 && size_ > 0) {
 //				if (powers_of_2 == size_) {
 //					// check if block is in our array
 //					uintptr_t free_block = free_lists[i];
-//					while (free_block != NULL) {
-//						if (curblk == free_block) {
+//					while (free_block != 0) {
+//						if (cur_blkp == free_block) {
 //							// found it
 //							break;
 //						}
 //						free_block = *(free_block);
 //					}
-//					if (free_block == NULL) {
+//					if (free_block == 0) {
 //						// error
 //					}
 //				}
@@ -350,18 +450,36 @@ int mm_check(void){
 //			}
 //
 //		}
-//		curblk = NEXT_BLKP(curblk);
+//		cur_blkp = NEXT_BLKP(cur_blkp);
 //	}
-	return 0;
 
+
+int get_array_position(unsigned int num_dwords) {
+	if (num_dwords > INITIAL_HEAP_SIZE)
+		return FREE_LIST_SIZE - 1;	// last element of the free list is reserved for blocks larger than 512 dwords
+
+	unsigned int num_set_bits =__builtin_popcount(num_dwords);
+
+	if (num_set_bits > 1) {
+		// not a power of 2. Return one position up
+		return sizeof(int)*8 - __builtin_clz(num_dwords);
+	} else if (num_set_bits == 1) {
+		// is a power of 2. Return this position
+		return sizeof(int)*8 - __builtin_clz(num_dwords)-1;
+	} else {
+		// this is a zero. Should not get here
+		return -1;
+	}
 }
 
-int get_array_position(unsigned int num_words) {
-	unsigned short log2;
-
-	log2 = 0;
-	for (; log2 <= 10; log2++) {
-		num_words = num_words >> 1;
+/*
+ * Calculate 2^i
+ */
+int get_power_of_2(int i) {
+	int result = 1;
+	while (i > 0) {
+		result<<=1;
+		i--;
 	}
-	return log2;
+	return result;
 }

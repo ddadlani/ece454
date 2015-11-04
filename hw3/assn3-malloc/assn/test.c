@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int get_array_position(unsigned int num_dwords) {
+int get_array_position_malloc(unsigned int num_dwords) {
 
 //	unsigned short log2;
 	unsigned int num_set_bits =__builtin_popcount(num_dwords);
@@ -25,7 +25,7 @@ void test_array_pos() {
 
 	int i = 0;
 	for (i = 0; i < 10; i++) {
-		unsigned int answer = get_array_position(test_samples[i]);
+		unsigned int answer = get_array_position_malloc(test_samples[i]);
 		printf("Answer: %u\n", answer);
 		printf("Test answer: %u\n" , test_answers[i]);
 		if (answer != test_answers[i])

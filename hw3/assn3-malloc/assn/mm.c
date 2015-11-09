@@ -73,7 +73,7 @@ team_t team = {
 #define SET_NEXT_FREE_BLKP(fbp, val) (*(void **) (fbp+WSIZE) = val)
 
 #define INITIAL_HEAP_SIZE 512
-#define MAX_INTERNAL_FRAGMENTATION (3*DSIZE)
+#define MAX_INTERNAL_FRAGMENTATION (1*DSIZE)
 
 void* heap_listp = NULL;
 
@@ -142,7 +142,7 @@ int mm_init(void) {
 	free_list_head = heap_listp;
 
 	printf("heap_listp: %p\n", heap_listp);
-	print_free_list();
+	//print_free_list();
 	return 0;
 }
 
@@ -260,7 +260,7 @@ void *extend_heap(size_t words) {
 	void* coalesced_bp = coalesce(bp);
 
 	printf("Exited extend heap\n");
-	print_free_list();
+	//print_free_list();
 	return coalesced_bp;
 
 }
@@ -279,18 +279,19 @@ void * find_fit(size_t asize) {
 	int least_size_diff = 99999999, cur_size_diff;
 
 	while (cur_blkp != NULL) {
-		cur_size_diff = GET_SIZE(HDRP(cur_blkp)) - asize;
-		printf("cur_size_diff: %d\n", cur_size_diff);
+		int temp = GET_SIZE(HDRP(cur_blkp));
+		cur_size_diff = (temp - (int) asize);
+		//printf("blksize: %d, asize: %ul cur_size_diff: %d\n", temp, (unsigned int) asize, cur_size_diff);
 		if (cur_size_diff == 0) {
 			// found the exact fit
-			printf("FOUND EXACT FIT");
+			//printf("FOUND EXACT FIT at %p", cur_blkp);
 			best_fit_blkp = cur_blkp;
 			least_size_diff = 0;
 			break;
 		} else if (cur_size_diff > 0) {
 			if ((best_fit_blkp == NULL) || (cur_size_diff < least_size_diff)) {
 				// we don't have a previous best fit or this block fits better than our previous best fit block
-				printf("this block fits better than our previous best fit block\n");
+			//	printf("this block fits better than our previous best fit block\n");
 				best_fit_blkp = cur_blkp;
 				least_size_diff = cur_size_diff;
 			}
@@ -328,7 +329,7 @@ void mm_free(void *bp) {
 	bp = coalesce(bp);
 
 	printf("Exiting free\n");
-	print_free_list();
+	//print_free_list();
 
 	//mm_check();
 	//	 printf("ERROR IN HEAP after free bp = %p size = %lu\n ", (int*) bp, GET_SIZE(HDRP(bp)));
@@ -379,14 +380,16 @@ void *mm_malloc(size_t size) {
 	size_t free_blk_size = GET_SIZE(HDRP(bp));
 	int remaining_free_blk_size = (int) (free_blk_size - asize);
 	// printf("GET_SIZE(HDRP(bp)): %lu\n",GET_SIZE(HDRP(bp)));
-	printf("free_blk_size: %u\n",(unsigned int)free_blk_size);
+	// printf("free_blk_size: %u\n",(unsigned int)free_blk_size);
 	// printf("bp: %p\n",bp);
 	assert(remaining_free_blk_size >= 0);
+                //printf("remaining_blk_size: %d\n",remaining_free_blk_size);
 
 	if (remaining_free_blk_size > MAX_INTERNAL_FRAGMENTATION) {
 		/*split free block*/
 		void *split_bp = bp + asize;
 		trim_free_block(bp, split_bp, remaining_free_blk_size);
+		//printf("remaining_blk_size: %d\n",remaining_free_blk_size);
 		// malloc remaining asize
 		place(bp, asize);
 	} else {
@@ -398,7 +401,7 @@ void *mm_malloc(size_t size) {
 //		 printf("ERROR WITH HEAP!!\n");
 
 	printf("Exiting malloc\n");
-	print_free_list();
+	//print_free_list();
 	return bp;
 }
 
@@ -441,7 +444,7 @@ void *mm_realloc(void *ptr, size_t size) {
 	memcpy(newptr, oldptr, copySize);
 	mm_free(oldptr);
 	printf("Exiting realloc done\n");
-	print_free_list();
+	//print_free_list();
 	return newptr;
 }
 
@@ -526,12 +529,16 @@ void print_free_list() {
 void trim_free_block(void* bp, void *new_bp, size_t new_size) {
 	// update free block header, footer and move pointers to new position of free block
 	PUT(HDRP(new_bp), PACK(new_size, 0));
-	SET_PREV_FREE_BLKP(new_bp, PREV_FREE_BLKP(bp));
-	SET_NEXT_FREE_BLKP(new_bp, NEXT_FREE_BLKP(bp));
+	//SET_PREV_FREE_BLKP(new_bp, PREV_FREE_BLKP(bp));
+	//SET_NEXT_FREE_BLKP(new_bp, NEXT_FREE_BLKP(bp));
 	PUT(FTRP(new_bp), PACK(new_size, 0));
-	if (bp == free_list_head) {
+	/* if (bp == free_list_head) {
 		free_list_head = new_bp;
-	}
+	} else {
+		SET_NEXT_FREE_BLKP(	
+	} */
+	remove_from_free_list(bp);
+	add_to_free_list(new_bp);
 }
 
 void remove_from_free_list(void *bp) {

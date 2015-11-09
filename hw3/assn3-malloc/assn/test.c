@@ -1,35 +1,36 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int get_array_position_malloc(unsigned int num_dwords) {
+int get_free_list_index(unsigned int num_words) {
+	if(num_words > (0x1 << 13))
+		return 14;
 
-//	unsigned short log2;
-	unsigned int num_set_bits =__builtin_popcount(num_dwords);
+	unsigned int num_set_bits =__builtin_popcount(num_words);
 
-	if (num_set_bits > 1) {
-		// not a power of 2. Return one position up
-		return sizeof(int)*8 - __builtin_clz(num_dwords);
-	} else if (num_set_bits == 1) {
-		// is a power of 2. Return this position
-		return sizeof(int)*8 - __builtin_clz(num_dwords)-1;
-	} else {
-		// this is a zero. Should not get here
+	if (num_set_bits > 1) {	// not a power of 2. Return one position up
+		return (sizeof(int) << 3) - __builtin_clz(num_words);
+	} else if (num_set_bits == 1) {	// is a power of 2. Return this position
+		return (sizeof(int) << 3) - __builtin_clz(num_words)-1;
+	} else { // this is a zero. Should not get here
 		return -1;
 	}
 }
 
 
 void test_array_pos() {
-	unsigned int test_samples[] = {1, 2, 4, 8, 16, 32, 48, 64, 128, 256, 512};
-	unsigned int test_answers[] = {0, 1, 2, 3, 4, 5, 6, 6, 7, 8, 9};
+	unsigned int test_samples[] = {1, 2, 3, 4, 5, 8, 16, 32, 48, 64, 76, 128, 256, 512, 1024, 8000, 8192, 8800, 16488, 40000};
+	unsigned int test_answers[] = {0, 1, 2, 2, 3, 3, 4, 5, 6, 6, 7, 7, 8, 9, 10, 13, 13, 14, 14, 14};
 
 	int i = 0;
-	for (i = 0; i < 10; i++) {
-		unsigned int answer = get_array_position_malloc(test_samples[i]);
-		printf("Answer: %u\n", answer);
-		printf("Test answer: %u\n" , test_answers[i]);
-		if (answer != test_answers[i])
-			printf("Didn't work\n");
+	int len = sizeof(test_samples) >> 2;
+	for (i = 0; i < len; i++) {
+		unsigned int answer = get_free_list_index(test_samples[i]);
+		printf("OK\n");
+		if (answer != test_answers[i]) {
+			printf("Didn't work!\n");
+			printf("Answer: %u\n", answer);
+			printf("Test answer: %u\n" , test_answers[i]);
+		}
 	}
 
 }

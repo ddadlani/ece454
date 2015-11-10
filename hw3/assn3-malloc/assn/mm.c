@@ -72,7 +72,7 @@ team_t team = {
 #define SET_PREV_FREE_BLKP(fbp, val) (*(void **) (fbp) = val)
 #define SET_NEXT_FREE_BLKP(fbp, val) (*(void **) (fbp+WSIZE) = val)
 
-#define INITIAL_HEAP_SIZE 512
+#define INITIAL_HEAP_SIZE 32
 #define MAX_INTERNAL_FRAGMENTATION (1*DSIZE)
 
 void* heap_listp = NULL;
@@ -82,6 +82,8 @@ int heap_length = INITIAL_HEAP_SIZE;
 
 /*Explicit Free List*/
 void *free_list_head = NULL;
+unsigned int free_list_length = 0;
+void *mid_list_blk = NULL;
 
 void trim_free_block(void *bp, void *new_bp, size_t new_size);
 
@@ -134,8 +136,10 @@ int mm_init(void) {
 
 	// add first free block to list
 	free_list_head = heap_listp;
+	free_list_length++;
+	mid_list_blk = heap_listp;
 
-	printf("heap_listp: %p\n", heap_listp);
+	//printf("heap_listp: %p\n", heap_listp);
 	//print_free_list();
 	return 0;
 }
@@ -209,7 +213,7 @@ void *coalesce(void *bp) {
  * and reallocate its new header
  **********************************************************/
 void *extend_heap(size_t words) {
-	printf("Entered extend heap\n");
+	//printf("Entered extend heap\n");
 
 	char *bp;
 	size_t size;
@@ -237,7 +241,7 @@ void *extend_heap(size_t words) {
 	/* Coalesce if the previous block was free */
 	void* coalesced_bp = coalesce(bp);
 
-	printf("Exited extend heap\n");
+	//printf("Exited extend heap\n");
 	//print_free_list();
 	return coalesced_bp;
 
@@ -293,7 +297,7 @@ void place(void* bp, size_t asize) {
  * Free the block and coalesce with neighbouring blocks
  **********************************************************/
 void mm_free(void *bp) {
-	printf("Freeing block %p of size %lu\n", bp, GET_SIZE(HDRP(bp)));
+	//printf("Freeing block %p of size %lu\n", bp, GET_SIZE(HDRP(bp)));
 	if (bp == NULL) {
 		return;
 	}
@@ -303,7 +307,7 @@ void mm_free(void *bp) {
 
 	bp = coalesce(bp);
 
-	printf("Exiting free\n");
+	//printf("Exiting free\n");
 	//print_free_list();
 
 	//mm_check();
@@ -322,7 +326,7 @@ void mm_free(void *bp) {
 void *mm_malloc(size_t size) {
 	//mm_check();
 //		 printf("ERROR WITH HEAP!!\n");
-	printf("Entering malloc\n");
+//	printf("Entering malloc\n");
 
 	size_t asize; /* adjusted block size in bytes */
 	size_t extendsize; /* amount to extend heap if no fit */
@@ -338,11 +342,12 @@ void *mm_malloc(size_t size) {
 	else
 		asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
 
-	printf("Asize: %u\n", (unsigned int) asize);
-
+//	printf("Asize: %u\n", (unsigned int) asize);
+//	print_free_list();
 	/* Search the free list for a fit */
 	bp = find_fit(asize);
 	if (bp == NULL) {
+		//printf("No fit found. Extending heap\n");
 		/* No fit found. Get more memory and place the block */
 		extendsize = MAX(asize, CHUNKSIZE);
 		bp = extend_heap(extendsize / WSIZE);
@@ -370,7 +375,7 @@ void *mm_malloc(size_t size) {
 	//mm_check();
 //		 printf("ERROR WITH HEAP!!\n");
 
-	printf("Exiting malloc\n");
+	//printf("Exiting malloc\n");
 	//print_free_list();
 	return bp;
 }
@@ -384,12 +389,12 @@ void *mm_realloc(void *ptr, size_t size) {
 	/* If size == 0 then this is just free, and we return NULL. */
 	if (size == 0) {
 		mm_free(ptr);
-		printf("Exiting realloc free\n");
+		//printf("Exiting realloc free\n");
 		return NULL;
 	}
 	/* If oldptr is NULL, then this is just malloc. */
 	if (ptr == NULL) {
-		printf("Exiting realloc malloc \n");
+		//printf("Exiting realloc malloc \n");
 		return (mm_malloc(size));
 	}
 
@@ -398,13 +403,45 @@ void *mm_realloc(void *ptr, size_t size) {
 	size_t copySize = GET_SIZE(HDRP(oldptr));
 
 	/* If size requested is the same as before, return old pointer*/
-	if (copySize == size) {
+	//if ((copySize - size) <= DSIZE) {
+	if (copySize == size){
 		return oldptr;
 	}
+	 else {
+		size = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
 
+		if ((copySize - size) <= DSIZE) {
+			return oldptr;
+		}
+		else if (size < (copySize - DSIZE)) {
+
+			void *freeptr = (void *) (oldptr + size);
+			newptr = oldptr;
+			PUT(HDRP(newptr), PACK(size, 1));
+			PUT(FTRP(newptr), PACK(size, 1));
+			PUT(HDRP(freeptr), PACK(copySize - size, 0));
+			PUT(FTRP(freeptr), PACK(copySize - size, 0));
+			add_to_free_list(freeptr);
+			return newptr;
+		} else {
+			//copySize > size
+			if (!GET_ALLOC(NEXT_BLKP(oldptr))) {
+
+				void *next_ptr = NEXT_BLKP(oldptr);
+				size_t extended_size = GET_SIZE(next_ptr) + size;
+				if (copySize <= extended_size) {
+					remove_from_free_list(next_ptr);
+					PUT(HDRP(oldptr), PACK(extended_size, 1));
+					PUT(FTRP(oldptr), PACK(extended_size, 1));
+					return oldptr;
+				}
+
+			}
+		}
+	}
 	newptr = mm_malloc(size);
 	if (newptr == NULL) {
-		printf("Exiting realloc out of mem\n");
+		//printf("Exiting realloc out of mem\n");
 		return NULL;
 	}
 
@@ -413,7 +450,7 @@ void *mm_realloc(void *ptr, size_t size) {
 		copySize = size;
 	memcpy(newptr, oldptr, copySize);
 	mm_free(oldptr);
-	printf("Exiting realloc done\n");
+	//printf("Exiting realloc done\n");
 	//print_free_list();
 	return newptr;
 }
@@ -512,7 +549,7 @@ void trim_free_block(void* bp, void *new_bp, size_t new_size) {
 }
 
 void remove_from_free_list(void *bp) {
-	printf("Removing %p from free list\n",bp);
+	//printf("Removing %p from free list\n",bp);
 	void *prev_bp = PREV_FREE_BLKP(bp);
 	void *next_bp = NEXT_FREE_BLKP(bp);
 	if (prev_bp == NULL) {
@@ -524,7 +561,7 @@ void remove_from_free_list(void *bp) {
 		// remove block from end of list
 		SET_NEXT_FREE_BLKP(prev_bp, next_bp);
 	} else {
-		printf("prev: %p, next: %p\n",prev_bp, next_bp);
+		//printf("prev: %p, next: %p\n",prev_bp, next_bp);
 		// remove block from middle
 		SET_NEXT_FREE_BLKP(prev_bp, next_bp);
 		SET_PREV_FREE_BLKP(next_bp, prev_bp);

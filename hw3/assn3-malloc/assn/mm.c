@@ -150,6 +150,7 @@ void print_free_list();
 		free_lists[i] = 0;
 	}
 
+	printf("Heap initialized at %p with size %u\n", heap_listp, heap_length);
 	add_to_free_list(heap_listp);
 	return 0;
  }
@@ -164,6 +165,7 @@ void print_free_list();
  **********************************************************/
 void *coalesce(void *bp)
 {
+	printf("About to coalesce\n");
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
@@ -182,9 +184,9 @@ void *coalesce(void *bp)
     else if (prev_alloc && !next_alloc) { /* Case 2 */
 		//account for size 16 external fragmentation which isn't
 		//in the free list
-		if (GET_SIZE(HDRP(NEXT_BLKP(bp))) != DSIZE) {
-			assert(remove_from_free_list(NEXT_BLKP(bp)));
-		}
+		assert (GET_SIZE(HDRP(NEXT_BLKP(bp))) != DSIZE);
+		assert(remove_from_free_list(NEXT_BLKP(bp)));
+
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -194,10 +196,10 @@ void *coalesce(void *bp)
     else if (!prev_alloc && next_alloc){
 		//account for size 16 external fragmentation which isn't
 		//in the free list
-		if (GET_SIZE(HDRP(PREV_BLKP(bp))) != DSIZE) {
-			void * if_free = remove_from_free_list(PREV_BLKP(bp));
-			assert(if_free);
-		}
+		assert(GET_SIZE(HDRP(PREV_BLKP(bp))) != DSIZE);
+		void * if_free = remove_from_free_list(PREV_BLKP(bp));
+		assert(if_free);
+
     	  /* Case 3 */
          size += GET_SIZE(HDRP(PREV_BLKP(bp)));
 		 PUT(FTRP(bp), PACK(size, 0));
@@ -210,10 +212,10 @@ void *coalesce(void *bp)
 		//in the free list
 		int size_prev = GET_SIZE(HDRP(PREV_BLKP(bp)));
 		int size_next = GET_SIZE(FTRP(NEXT_BLKP(bp)));
-		if (size_prev != DSIZE)
-			assert(remove_from_free_list(PREV_BLKP(bp)));
-		if (size_next != DSIZE)
-			assert(remove_from_free_list(NEXT_BLKP(bp)));
+		assert(size_prev != DSIZE);
+		assert(remove_from_free_list(PREV_BLKP(bp)));
+		assert(size_next != DSIZE);
+		assert(remove_from_free_list(NEXT_BLKP(bp)));
 
 		size += size_prev + size_next;
         // printf("Coalesce: size_p: %u\n",(unsigned int) size_prev);
@@ -223,7 +225,7 @@ void *coalesce(void *bp)
 		coalesced_bp = PREV_BLKP(bp);
 	}
 
-	// printf("Coalesced into size: %u, addr: %p\n",(unsigned int) size, (int*)coalesced_bp);
+	 printf("Coalesced into size: %u, addr: %p\n",(unsigned int) size, (int*)coalesced_bp);
 	return coalesced_bp;
 }
 
@@ -235,7 +237,7 @@ void *coalesce(void *bp)
  **********************************************************/
 void *extend_heap(size_t words)
 {
-    // printf("Entered extend heap\n");
+     printf("Entered extend heap\n");
 
     char *bp;
     // size in bytes
@@ -262,7 +264,7 @@ void *extend_heap(size_t words)
     PUT(FTRP(bp), PACK(size, 0));                // free block footer
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));        // new epilogue header
     heap_length += (size >> 3);
-    // printf("Exiting extend heap, new heap_length: %d\n", heap_length);
+     printf("Exiting extend heap, new heap_length: %d\n", heap_length);
     /* Coalesce if the previous block was free */
     return coalesce(bp);
 
@@ -277,7 +279,7 @@ void *extend_heap(size_t words)
  **********************************************************/
 void * find_fit(size_t asize)
 {
-	// printf("Entered find fit.\n");
+	 printf("Entered find fit.\n");
 	// Divide by WSIZE (which is 8 bytes)
 	unsigned int num_words_payload = (asize >> 3) - 2;
 	int free_list_index = get_free_list_index(num_words_payload);
@@ -316,11 +318,11 @@ void * find_fit(size_t asize)
 	}
 	// found a good fit. If not, will extend heap in malloc
 	if (best_fit_blkp != NULL) {
-		// printf("Found best_fit blkp, leaving find fit.\n");
+		 printf("Found best_fit blkp, leaving find fit.\n");
 		remove_from_free_list(best_fit_blkp);
 		return best_fit_blkp;
 	}
-	// printf("Found nothing, leaving find fit.\n");
+	 printf("Found nothing, leaving find fit.\n");
 	return NULL;
 }
 
@@ -343,7 +345,7 @@ void place(void* bp, size_t asize)
  **********************************************************/
 void mm_free(void *bp)
 {
-	// printf("Freeing block %p of size %lu\n",bp, GET_SIZE(HDRP(bp)));
+	 printf("Freeing block %p of size %lu\n",bp, GET_SIZE(HDRP(bp)));
     if(bp == NULL){
       return;
     }
@@ -356,7 +358,7 @@ void mm_free(void *bp)
     printf("New bp: %p\n",new_bp);
     // size may be different after coalescing
     add_to_free_list(new_bp);
-    // printf("Exiting free\n");
+     printf("Exiting free\n");
     if(!mm_check())
     	 printf("ERROR IN HEAP after free bp = %p size = %lu\n ", (int*) bp, GET_SIZE(HDRP(bp)));
     //}
@@ -375,7 +377,7 @@ void *mm_malloc(size_t size)
 {
 	if(!mm_check())
 		printf("ERROR WITH HEAP when entering malloc for size %lu\n",size);
-	// printf("Entering malloc\n");
+	 printf("Entering malloc\n");
 
     size_t asize; /* adjusted block size in bytes */
     size_t extendsize; /* amount to extend heap if no fit */
@@ -394,11 +396,12 @@ void *mm_malloc(size_t size)
     /** Coalesce as many free blocks as possible in the heap
      *  so that find_fit() is accurate
      */
+    print_free_list();
     coalesce_heap();
 
     /* Search the free list for a fit */
      printf("Asize: %u\n",(unsigned int)asize);
-     print_free_list();
+//     print_free_list();
     if ((bp = find_fit(asize)) != NULL) {
     	int temp = GET_SIZE(HDRP(bp));
     	int split_size = temp - asize;
@@ -443,6 +446,7 @@ void *mm_malloc(size_t size)
 		printf("ERROR WITH HEAP when exiting malloc after allocing size %lu\n",size);
 		print_free_list();
 	}
+	printf("Exiting malloc\n");
     return bp;
 }
 
@@ -492,7 +496,7 @@ void *mm_realloc(void *ptr, size_t size)
  *********************************************************/
 int mm_check(void){
 
-	// printf("CHECKING HEAP\n");
+	 printf("CHECKING HEAP\n");
 	int num_blk = 0;
 	void * cur_blkp = heap_listp;
 
@@ -506,34 +510,41 @@ int mm_check(void){
 			break;
 //		// printf("Block %d: Size = %u, Allocated = %u, Address = %p\n",num_blk, (unsigned int) size, (unsigned int) alloc, cur_blkp);
 		num_blk++;
+		void *ftr = cur_blkp + size - DSIZE;
+		if (GET_SIZE(ftr) != size) {
+			printf("ERROR: Block at %p has unequal sizes %lu and %lu\n", cur_blkp, size, GET_SIZE(ftr));
+			return 0;
+		}
 		if (alloc) {
 			// add these checks later
-			void *ftr = cur_blkp + size - DSIZE;
-			if (GET_SIZE(ftr) != size) {
-				printf("ERROR: Allocated block at %p has unequal sizes %lu and %lu\n",cur_blkp, size, GET_SIZE(ftr));
-			}
+
 		}
 		else {
-			//payload of the free block
-			unsigned int payload_size = (size - DSIZE) >> 3;
-			int free_list_index = get_free_list_index(payload_size);
-			void *head = free_lists[free_list_index];
-			// int lc2 = 0;
-			while (head != NULL) {
-				if (head == cur_blkp)
-					break;
-				// address of next free block in linked list should
-				// be located at head
-				// printf("head: %p index: %d\n", head, get_free_list_index(payload_size));
-				head = NEXT_FREE_BLKP(head);
+			assert(size > DSIZE);
+				//payload of the free block
+				unsigned int payload_size = (size - DSIZE) >> 3;
+				int free_list_index = get_free_list_index(payload_size);
+				void *head = free_lists[free_list_index];
+				// int lc2 = 0;
+				while (head != NULL) {
+					if (head == cur_blkp)
+						break;
+					// address of next free block in linked list should
+					// be located at head
+					// printf("head: %p index: %d\n", head, get_free_list_index(payload_size));
+					head = NEXT_FREE_BLKP(head);
+				}
+
+				// lc2 = 0;
+				// head was not found in the linked list at free_lists[i]
+				if (head == NULL) {
+					printf(
+							"ERROR: Free block %p was not found at free_list[%d]\n",
+							head, get_free_list_index(payload_size));
+					return 0;
+				}
 			}
-			// lc2 = 0;
-			// head was not found in the linked list at free_lists[i]
-			if ((size > DSIZE) && (head == NULL)) {
-				printf("ERROR: Free block %p was not found at free_list[%d]\n",head, get_free_list_index(payload_size));
-				return 0;
-			}
-		}
+
 		cur_blkp = NEXT_BLKP(cur_blkp);
 		// printf("cur_blkp in heap: %p, size of block: %u", (int * ) cur_blkp, (unsigned int) GET_SIZE(HDRP(cur_blkp)));
 	}
@@ -567,62 +578,70 @@ void print_free_list() {
  * split_size: Size of the partition (including header and footer) in bytes
  */
 void trim_free_block(void *split_bp, int split_size) {
-	// printf("Entering trim_free\n");
-//	assert(split_bp != NULL);
-//	void* partition_bp = split_bp;
-//	int free_list_index = -1;
-//	int partition_size = 0;
-//	// recursively split and place free blocks in appropriate free lists position
-////	while (split_size > DSIZE) {
-//		// get closest fit index
-//		int splitsize_payload_words = (split_size >> 3) - 2;
-//		free_list_index = (__builtin_popcount(splitsize_payload_words) > 1)? get_free_list_index(splitsize_payload_words) /*- 1*/ : get_free_list_index(splitsize_payload_words);
-//
-////		// printf("partition_array_pos : %d\n", partition_array_pos);
-//
-////		if (partition_array_pos == (FREE_LIST_SIZE - 1)) {
-////			// should already be aligned to a double word
-////			assert(!(split_size % 16));
-////			PUT(HDRP(partition_bp), PACK(split_size, 0));
-////			PUT(FTRP(partition_bp), PACK(split_size, 0));
-////			add_to_free_list(partition_bp, partition_array_pos);
-////			break;
-////		}
-//		int partition_size_payload = (1 << free_list_index) * WSIZE;
-//		partition_size = partition_size_payload + DSIZE;
-//		if(partition_size < 0)
-//			printf("ERROR: Size of partition is %d\n",partition_size);
-//
-////		// printf("(IN DW) partition_size: %d, split_size : %d\n", partition_size>>4, split_size>>4);
-////		// printf("(IN DW) split_size - partition_size = %d\n", (split_size - partition_size)>>4);
-//
-//		assert(partition_size >= 0);
-////		if (partition_bp == (void *)0x7f11bbfc5020) {
-////			printf("Array position: %d, partition_size: %d\n",partition_array_pos, partition_size);
-//
-////		}
-//		// set header and footer of free split block
-//		PUT(HDRP(partition_bp), PACK(partition_size, 0));
-//		PUT(FTRP(partition_bp), PACK(partition_size, 0));
-//		// insert into head of linked list at partition_array_pos
-//		add_to_free_list(partition_bp);
+	 printf("Entering trim_free\n");
+	assert(split_bp != NULL);
+	void* partition_bp = split_bp;
+	int free_list_index = -1;
+	int partition_size = 0;
+	// recursively split and place free blocks in appropriate free lists position
+	while (split_size > DSIZE) {
+		// get closest fit index
+		printf("Split_size: %d\n",split_size);
+		int splitsize_payload_words = (split_size >> 3) - 2;
+		free_list_index =  get_free_list_index(splitsize_payload_words);
 
-//		partition_bp += partition_size;
-//		split_size -= partition_size;
-//	}
+//		// printf("partition_array_pos : %d\n", partition_array_pos);
+
+//		if (partition_array_pos == (FREE_LIST_SIZE - 1)) {
+//			// should already be aligned to a double word
+//			assert(!(split_size % 16));
+//			PUT(HDRP(partition_bp), PACK(split_size, 0));
+//			PUT(FTRP(partition_bp), PACK(split_size, 0));
+//			add_to_free_list(partition_bp, partition_array_pos);
+//			break;
+//		}
+		int partition_size_payload = (__builtin_popcount(splitsize_payload_words) > 1) ? (1 << (free_list_index-1)) * WSIZE : (1 << free_list_index) * WSIZE ;
+		partition_size = partition_size_payload + DSIZE;
+		if(partition_size < 0)
+			printf("ERROR: Size of partition is %d\n",partition_size);
+
+//		// printf("(IN DW) partition_size: %d, split_size : %d\n", partition_size>>4, split_size>>4);
+//		// printf("(IN DW) split_size - partition_size = %d\n", (split_size - partition_size)>>4);
+
+		assert(partition_size >= 0);
+//		if (partition_bp == (void *)0x7f11bbfc5020) {
+//			printf("Array position: %d, partition_size: %d\n",partition_array_pos, partition_size);
+
+//		}
+
+		split_size -= partition_size;
+		if (split_size == DSIZE)
+			partition_size += DSIZE;
+
+//		// set header and footer of free split block
+		PUT(HDRP(partition_bp), PACK(partition_size, 0));
+		PUT(FTRP(partition_bp), PACK(partition_size, 0));
+//		// insert into head of linked list at partition_array_pos
+		add_to_free_list(partition_bp);
+
+		partition_bp += partition_size;
+		printf("Partition_size : %d\n",partition_size);
+	}
 //	// odd DW left, assign header and footer with size 1 DW
 //	if (split_size == DSIZE) {
 //		// set header and footer of free split block
 //		PUT(HDRP(partition_bp), PACK(split_size, 0));
 //		PUT(FTRP(partition_bp), PACK(split_size, 0));
 //	}
-	// printf("Leaving trim_free\n");
+	 printf("Leaving trim_free\n");
 }
 
 int get_free_list_index(unsigned int num_words) {
 	//If the size is greater than our largest fit, return the last index
 	if(num_words > LARGEST_FIT_SIZE)
 		return FREE_LIST_SIZE - 1;
+
+	printf("num_words: %u\n",num_words);
 
 	unsigned int num_set_bits =__builtin_popcount(num_words);
 
@@ -634,6 +653,7 @@ int get_free_list_index(unsigned int num_words) {
 		return (sizeof(int) << 3) - __builtin_clz(num_words)-1;
 	} else {
 		// this is a zero. Should not get here
+		printf("Got a zero value\n");
 		return -1;
 	}
 }
@@ -685,11 +705,13 @@ void add_to_free_list(void *bp) {
 	size_t size = GET_SIZE(HDRP(bp));
 	size_t payload_words = (size -DSIZE) >> 3;
 	int index = get_free_list_index(payload_words);
+	printf("Adding free block %p to free list at index %d\n",bp, index);
 	PUT(bp, (uintptr_t) free_lists[index]);
 	free_lists[index] = bp;
 }
 
 void coalesce_heap() {
+	printf("Coalescing heap\n");
 	if (!mm_check()) {
 		printf("ERROR with heap before coalescing heap\n");
 		print_free_list();
@@ -702,17 +724,21 @@ void coalesce_heap() {
 	while (*(char *) HDRP(bp) != 0x1) {
 		// if bp is free
 		if (!GET_ALLOC(HDRP(bp))) {
+			assert(remove_from_free_list(bp));
 			old_size = GET_SIZE(HDRP(bp));
 			coalesced_bp = coalesce(bp);
 			assert(coalesced_bp != NULL);
 
 			// coalesce() removed from free_list, so add it back
-			if ((old_size != GET_SIZE(HDRP(bp))||(coalesced_bp != bp)))
-				add_to_free_list(coalesced_bp);
+			size_t new_size = GET_SIZE(HDRP(coalesced_bp));
+//			if ((old_size != new_size)||(coalesced_bp != bp))
+			add_to_free_list(coalesced_bp);
 
+			bp = coalesced_bp;
 		}
 		// bp = next block in heap
 		bp = NEXT_BLKP(bp);
 	}
+	printf("Coalesced entire heap\n");
 }
 

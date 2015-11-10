@@ -89,6 +89,8 @@ void* heap_listp = NULL;
 // Number of words currently in the heap
 int heap_length = CHUNKSIZE;
 
+int free_counter = 0;
+
 
 // Segregated free list
 // each element of the free_list contains 2^i double-word sized blocks
@@ -202,6 +204,8 @@ void *coalesce(void *bp)
 	else { /* Case 4 */
 		//account for size 16 external fragmentation which isn't
 		//in the free list
+		mm_check();
+		print_free_list(0);
 		int size_prev = GET_SIZE(HDRP(PREV_BLKP(bp)));
 		int size_next = GET_SIZE(FTRP(NEXT_BLKP(bp)));
 		assert(size_prev != DSIZE);
@@ -279,41 +283,25 @@ void * find_fit(size_t asize)
 	assert(free_list_index >= 0);
 
 	// look in the largest block range to find a fit
-	void *best_fit_blkp = NULL;
+//	void *best_fit_blkp = NULL;
 	void *cur_blkp;
-	int best_fit = 999999999, cur_fit;
+	int /*best_fit = 999999999,*/ fit;
 
 	while (free_list_index < FREE_LIST_SIZE) {
 //		printf("In find fit\n");
 		cur_blkp = free_lists[free_list_index];
 		while (cur_blkp) {
-			cur_fit = GET_SIZE(HDRP(cur_blkp)) - asize;
-			if (cur_fit == 0) {
-				// found the exact fit
-				best_fit_blkp = cur_blkp;
-				best_fit = 0;
-				break;
-			} else if (cur_fit > 0) {
-				if ((best_fit_blkp == NULL) || (cur_fit < best_fit)) {
-					// we don't have a previous best fit or this fit is better than our previous best fit
-					best_fit_blkp = cur_blkp;
-					best_fit = cur_fit;
-				}
+			fit = GET_SIZE(HDRP(cur_blkp)) - asize;
+			if (fit >= 0) {
+				remove_from_free_list(cur_blkp);
+				return cur_blkp;
 			}
 			cur_blkp = NEXT_FREE_BLKP(cur_blkp);
 		}
 		// found a good fit, don't need to look in higher free list indices
-		if (best_fit_blkp != NULL)
-			break;
-
 		free_list_index++;
 	}
 	// found a good fit. If not, will extend heap in malloc
-	if (best_fit_blkp != NULL) {
-		 //printf("Found best_fit blkp, leaving find fit.\n");
-		remove_from_free_list(best_fit_blkp);
-		return best_fit_blkp;
-	}
 	 //printf("Found nothing, leaving find fit.\n");
 	return NULL;
 }
@@ -339,6 +327,7 @@ void place(void* bp, size_t asize)
  **********************************************************/
 void mm_free(void *bp)
 {
+	free_counter++;
 	 //printf("Freeing block %p of size %lu\n",bp, GET_SIZE(HDRP(bp)));
     if(bp == NULL){
       return;
@@ -347,15 +336,13 @@ void mm_free(void *bp)
     PUT(HDRP(bp), PACK(size,0));
     PUT(FTRP(bp), PACK(size,0));
 
+    void *new_bp = bp;
     //printf("Old bp: %p\n",bp);
-    void *new_bp = coalesce(bp);
+    	new_bp = coalesce(bp);
+    	free_counter = 0;
     //printf("New bp: %p\n",new_bp);
     // size may be different after coalescing
     add_to_free_list(new_bp);
-     //printf("Exiting free\n");
-//    if(!mm_check())
-//    	 printf("ERROR IN HEAP after free bp = %p size = %lu\n ", (int*) bp, GET_SIZE(HDRP(bp)));
-    //}
 }
 
 
@@ -405,8 +392,10 @@ void *mm_malloc(size_t size)
 		// set header and footer of free split block
 		PUT(HDRP(split_bp), PACK(split_size, 0));
 		PUT(FTRP(split_bp), PACK(split_size, 0));
-		// insert into head of linked list at partition_array_pos
 		add_to_free_list(split_bp);
+		void *coalesced_bp = coalesce(split_bp);
+		// insert into head of linked list at partition_array_pos
+		add_to_free_list(coalesced_bp);
 	}
 
 	// set header and footer of malloc'ed block
@@ -584,8 +573,18 @@ void print_free_list(int free_list_index) {
 
 int get_free_list_index(unsigned int num_words) {
 	//If the size is greater than our largest fit, return the last index
-	if(num_words > LARGEST_FIT_SIZE)
+	if(num_words > (1 << (FREE_LIST_SIZE)))
 		return FREE_LIST_SIZE - 1;
+
+//	if (num_words <= 2) {
+//		return 0;
+//	} else if (num_words <= 6) {
+//		return 1;
+//	} else if (num_words <= 12) {
+//		return 2;
+//	} else if (num_words <= 32) {
+//		return 3;
+//	}
 
 	unsigned int num_set_bits =__builtin_popcount(num_words);
 

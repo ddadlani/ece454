@@ -80,12 +80,6 @@ void* heap_listp = NULL;
 // Number of double words currently in the heap
 int heap_length = INITIAL_HEAP_SIZE;
 
-// Segregated free list
-// each element of the free_list contains 2^i double-word sized blocks
-// last element contains all blocks larger than 512 dwords
-//void *free_lists[FREE_LIST_SIZE];
-//unsigned int num_free_blocks[FREE_LIST_SIZE];
-
 /*Explicit Free List*/
 void *free_list_head = NULL;
 
@@ -173,10 +167,6 @@ void *coalesce(void *bp) {
 	}
 
 	else if (prev_alloc && !next_alloc) { /* Case 2 */
-		// account for size 16 external fragmentation which isn't in the free list
-//		if (GET_SIZE(HDRP(NEXT_BLKP(bp))) != DSIZE) {
-//			assert(remove_from_free_list(NEXT_BLKP(bp)));
-//		}
 		remove_from_free_list(NEXT_BLKP(bp));
 		assert(GET_SIZE(HDRP(NEXT_BLKP(bp))) > DSIZE);
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
@@ -186,11 +176,6 @@ void *coalesce(void *bp) {
 	}
 
 	else if (!prev_alloc && next_alloc) { /* Case 3 */
-		// account for size 16 external fragmentation which isn't in the free list
-//		if (GET_SIZE(HDRP(PREV_BLKP(bp))) != DSIZE) {
-//			void * if_free = remove_from_free_list(PREV_BLKP(bp));
-//			assert(if_free);
-//		}
 		remove_from_free_list(PREV_BLKP(bp));
 		assert(GET_SIZE(HDRP(PREV_BLKP(bp))) > DSIZE);
 		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
@@ -207,14 +192,7 @@ void *coalesce(void *bp) {
 		remove_from_free_list(PREV_BLKP(bp));
 		remove_from_free_list(NEXT_BLKP(bp));
 		assert(size_prev > DSIZE && size_next > DSIZE);
-//		if (size_prev != DSIZE)
-//			assert(remove_from_free_list(PREV_BLKP(bp)));
-//		if (size_next != DSIZE)
-//			assert(remove_from_free_list(NEXT_BLKP(bp)));
-
 		size += size_prev + size_next;
-		// printf("Coalesce: size_p: %u\n",(unsigned int) size_prev);
-		// printf("Coalesce: size_n: %u\n",(unsigned int) size_next);
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size,0));
 		PUT(FTRP(NEXT_BLKP(bp)), PACK(size,0));
 		coalesced_bp = PREV_BLKP(bp);
@@ -281,17 +259,14 @@ void * find_fit(size_t asize) {
 	while (cur_blkp != NULL) {
 		int temp = GET_SIZE(HDRP(cur_blkp));
 		cur_size_diff = (temp - (int) asize);
-		//printf("blksize: %d, asize: %ul cur_size_diff: %d\n", temp, (unsigned int) asize, cur_size_diff);
 		if (cur_size_diff == 0) {
 			// found the exact fit
-			//printf("FOUND EXACT FIT at %p", cur_blkp);
 			best_fit_blkp = cur_blkp;
 			least_size_diff = 0;
 			break;
 		} else if (cur_size_diff > 0) {
 			if ((best_fit_blkp == NULL) || (cur_size_diff < least_size_diff)) {
 				// we don't have a previous best fit or this block fits better than our previous best fit block
-			//	printf("this block fits better than our previous best fit block\n");
 				best_fit_blkp = cur_blkp;
 				least_size_diff = cur_size_diff;
 			}
@@ -349,7 +324,6 @@ void *mm_malloc(size_t size) {
 //		 printf("ERROR WITH HEAP!!\n");
 	printf("Entering malloc\n");
 
-	// return (num_dwords <= INITIAL_HEAP_SIZE) ? extend_heap(INITIAL_HEAP_SIZE * 2) : extend_heap(num_dwords * 2);
 	size_t asize; /* adjusted block size in bytes */
 	size_t extendsize; /* amount to extend heap if no fit */
 	char * bp;
@@ -379,17 +353,13 @@ void *mm_malloc(size_t size) {
 
 	size_t free_blk_size = GET_SIZE(HDRP(bp));
 	int remaining_free_blk_size = (int) (free_blk_size - asize);
-	// printf("GET_SIZE(HDRP(bp)): %lu\n",GET_SIZE(HDRP(bp)));
-	// printf("free_blk_size: %u\n",(unsigned int)free_blk_size);
-	// printf("bp: %p\n",bp);
+
 	assert(remaining_free_blk_size >= 0);
-                //printf("remaining_blk_size: %d\n",remaining_free_blk_size);
 
 	if (remaining_free_blk_size > MAX_INTERNAL_FRAGMENTATION) {
 		/*split free block*/
 		void *split_bp = bp + asize;
 		trim_free_block(bp, split_bp, remaining_free_blk_size);
-		//printf("remaining_blk_size: %d\n",remaining_free_blk_size);
 		// malloc remaining asize
 		place(bp, asize);
 	} else {

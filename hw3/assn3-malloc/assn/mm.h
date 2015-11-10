@@ -7,14 +7,12 @@ int mm_init(void);
 void *mm_malloc(size_t size);
 void mm_free(void *ptr);
 void *mm_realloc(void *ptr, size_t size);
-void trim_free_block(void *split_bp, int split_size);
 
 int get_free_list_index(unsigned int num_words);
 int mm_check(void);
 void *remove_from_free_list(void *bp);
 void add_to_free_list(void *bp);
 void print_free_list(int free_list_index);
-void coalesce_heap();
 /* 
  * Students work in teams of one or two.  Teams enter their team name, personal
  * names and login IDs in a struct of this type in their mm.c file.

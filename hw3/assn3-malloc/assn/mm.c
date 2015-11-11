@@ -169,7 +169,7 @@ void *coalesce(void *bp) {
 
 	else if (prev_alloc && !next_alloc) { /* Case 2 */
 		remove_from_free_list(NEXT_BLKP(bp));
-		assert(GET_SIZE(HDRP(NEXT_BLKP(bp))) > DSIZE);
+		//assert(GET_SIZE(HDRP(NEXT_BLKP(bp))) > DSIZE);
 		size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 		PUT(HDRP(bp), PACK(size, 0));
 		PUT(FTRP(bp), PACK(size, 0));
@@ -178,7 +178,7 @@ void *coalesce(void *bp) {
 
 	else if (!prev_alloc && next_alloc) { /* Case 3 */
 		remove_from_free_list(PREV_BLKP(bp));
-		assert(GET_SIZE(HDRP(PREV_BLKP(bp))) > DSIZE);
+		//assert(GET_SIZE(HDRP(PREV_BLKP(bp))) > DSIZE);
 		size += GET_SIZE(HDRP(PREV_BLKP(bp)));
 		PUT(FTRP(bp), PACK(size, 0));
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
@@ -192,7 +192,7 @@ void *coalesce(void *bp) {
 
 		remove_from_free_list(PREV_BLKP(bp));
 		remove_from_free_list(NEXT_BLKP(bp));
-		assert(size_prev > DSIZE && size_next > DSIZE);
+		//assert(size_prev > DSIZE && size_next > DSIZE);
 		size += size_prev + size_next;
 		PUT(HDRP(PREV_BLKP(bp)), PACK(size,0));
 		PUT(FTRP(NEXT_BLKP(bp)), PACK(size,0));
@@ -253,28 +253,17 @@ void *extend_heap(size_t words) {
  **********************************************************/
 void * find_fit(size_t asize) {
 	// look in the largest block range to find a fit
-	void *best_fit_blkp = NULL;
 	void *cur_blkp = free_list_head;
-	int least_size_diff = 99999999, cur_size_diff;
+	int cur_size_diff;
 
 	while (cur_blkp != NULL) {
-		int temp = GET_SIZE(HDRP(cur_blkp));
-		cur_size_diff = (temp - (int) asize);
-		if (cur_size_diff == 0) {
-			// found the exact fit
-			best_fit_blkp = cur_blkp;
-			least_size_diff = 0;
-			break;
-		} else if (cur_size_diff > 0) {
-			if ((best_fit_blkp == NULL) || (cur_size_diff < least_size_diff)) {
-				// we don't have a previous best fit or this block fits better than our previous best fit block
-				best_fit_blkp = cur_blkp;
-				least_size_diff = cur_size_diff;
-			}
+		cur_size_diff = (GET_SIZE(HDRP(cur_blkp)) - (int) asize);
+		if (cur_size_diff >= 0) {
+			return cur_blkp;
 		}
 		cur_blkp = NEXT_FREE_BLKP(cur_blkp);
 	}
-	return best_fit_blkp;
+	return NULL;
 }
 
 /**********************************************************
@@ -372,42 +361,58 @@ void *mm_malloc(size_t size) {
  * Implemented simply in terms of mm_malloc and mm_free
  *********************************************************/
 void *mm_realloc(void *ptr, size_t size) {
-//	printf("Entering realloc\n");
 	/* If size == 0 then this is just free, and we return NULL. */
 	if (size == 0) {
 		mm_free(ptr);
-//		printf("Exiting realloc free\n");
 		return NULL;
 	}
 	/* If oldptr is NULL, then this is just malloc. */
 	if (ptr == NULL) {
-//		printf("Exiting realloc malloc \n");
 		return (mm_malloc(size));
 	}
 
 	void *oldptr = ptr;
 	void *newptr;
-	size_t copySize = GET_SIZE(HDRP(oldptr));
+	size_t old_size = GET_SIZE(HDRP(oldptr));
+	size_t new_size = DSIZE * ((size + (DSIZE) + (DSIZE-1))/ DSIZE);
 
 	/* If size requested is the same as before, return old pointer*/
-	if (copySize == size) {
+	if (new_size <= old_size ) {
 		return oldptr;
-	}
+/*	} else if (new_size < (old_size - DSIZE)) {
+		newptr = ptr + new_size;
+		PUT(HDRP(newptr), PACK((old_size - new_size), 0));
+		PUT(FTRP(newptr), PACK((old_size - new_size), 0));
+		place(oldptr, new_size);
+		add_to_free_list(newptr);
+		return oldptr;*/
+	} else {
+		void* next_blkp = NEXT_BLKP(oldptr);
+		if (!GET_ALLOC(HDRP(next_blkp))) {
+				size_t combined_size = old_size + GET_SIZE(HDRP(next_blkp));
+				if (combined_size >= new_size) {
+					remove_from_free_list(next_blkp);
+					place(oldptr, combined_size);
+					assert(GET_SIZE(HDRP(oldptr)) == combined_size);
+					return oldptr;
+				}
+			}
+		else {
+			// If above condition doesn't meet, allocate new block, copy over contents, free old block
+			newptr = mm_malloc(size);
+			if (newptr == NULL) {
+				// printf("Exiting realloc out of mem\n");
+				return NULL;
+			}
 
-	newptr = mm_malloc(size);
-	if (newptr == NULL) {
-		// printf("Exiting realloc out of mem\n");
-		return NULL;
+			/* Copy the old data. */
+			memcpy(newptr, oldptr, old_size);
+			mm_free(oldptr);
+			return newptr;
+		}
 	}
-
-	/* Copy the old data. */
-	if (size < copySize)
-		copySize = size;
-	memcpy(newptr, oldptr, copySize);
-	mm_free(oldptr);
-	// printf("Exiting realloc done\n");
-	//print_free_list();
-	return newptr;
+	
+	return NULL;
 }
 
 /**********************************************************

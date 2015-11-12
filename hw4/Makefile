@@ -1,5 +1,5 @@
 
-CC = g++-4.7
+CC = g++-4.9
 CFLAGS = -O3
 
 all: randtrack 

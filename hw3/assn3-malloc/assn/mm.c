@@ -41,7 +41,7 @@ team_t team = {
 *************************************************************************/
 #define WSIZE       sizeof(void *)            /* word size (8 bytes on 64-bit) */
 #define DSIZE       (2 * WSIZE)            /* doubleword size (16 bytes on 64-bit) */
-#define CHUNKSIZE   (1<<13)      /* initial heap size (bytes) */
+#define CHUNKSIZE   (1<<7)      /* initial heap size (bytes) */
 
 #define MAX(x,y) ((x) > (y)?(x) :(y))
 
@@ -89,8 +89,7 @@ void* heap_listp = NULL;
 // Number of words currently in the heap
 int heap_length = CHUNKSIZE;
 
-int free_counter = 0;
-
+int coalesce_count = 0;
 
 // Segregated free list
 // each element of the free_list contains 2^i double-word sized blocks
@@ -275,35 +274,77 @@ void *extend_heap(size_t words)
  **********************************************************/
 void * find_fit(size_t asize)
 {
-	 //printf("Entered find fit.\n");
-	// Divide by WSIZE (which is 8 bytes)
+//		// Divide by WSIZE (which is 8 bytes)
+//		unsigned int num_words_payload = (asize >> 3) - 2;
+//		int free_list_index = get_free_list_index(num_words_payload);
+//		// If this is -1, asize was 0.
+//		assert(free_list_index >= 0);
+//
+//		// look in the largest block range to find a fit
+//	//	void *best_fit_blkp = NULL;
+//		void *cur_blkp;
+//		int fit;
+//
+//		while (free_list_index < FREE_LIST_SIZE) {
+//	//		printf("In find fit\n");
+//			cur_blkp = free_lists[free_list_index];
+//			while (cur_blkp) {
+//				fit = GET_SIZE(HDRP(cur_blkp)) - asize;
+//				if (fit >= 0) {
+//					remove_from_free_list(cur_blkp);
+//					return cur_blkp;
+//				}
+//				cur_blkp = NEXT_FREE_BLKP(cur_blkp);
+//			}
+//			// found a good fit, don't need to look in higher free list indices
+//			free_list_index++;
+//		}
+//		// found a good fit. If not, will extend heap in malloc
+//		 //printf("Found nothing, leaving find fit.\n");
+//		return NULL;
 	unsigned int num_words_payload = (asize >> 3) - 2;
-	int free_list_index = get_free_list_index(num_words_payload);
-	// If this is -1, asize was 0.
-	assert(free_list_index >= 0);
+		// If this is -1, asize was 0.
+		assert(free_list_index >= 0);
 
-	// look in the largest block range to find a fit
-//	void *best_fit_blkp = NULL;
-	void *cur_blkp;
-	int /*best_fit = 999999999,*/ fit;
+		// look in the largest block range to find a fit
+		void *best_fit_blkp = NULL;
+		void *cur_blkp;
+		int best_fit = 999999999, cur_fit;
 
-	while (free_list_index < FREE_LIST_SIZE) {
-//		printf("In find fit\n");
-		cur_blkp = free_lists[free_list_index];
-		while (cur_blkp) {
-			fit = GET_SIZE(HDRP(cur_blkp)) - asize;
-			if (fit >= 0) {
-				remove_from_free_list(cur_blkp);
-				return cur_blkp;
+		while (free_list_index < FREE_LIST_SIZE) {
+	//		printf("In find fit\n");
+			cur_blkp = free_lists[free_list_index];
+			while (cur_blkp) {
+				count++;
+				cur_fit = GET_SIZE(HDRP(cur_blkp)) - asize;
+				if (cur_fit == 0) {
+					// found the exact fit
+					best_fit_blkp = cur_blkp;
+					best_fit = 0;
+					break;
+				} else if (cur_fit > 0) {
+					if ((best_fit_blkp == NULL) || (cur_fit < best_fit)) {
+						// we don't have a previous best fit or this fit is better than our previous best fit
+						best_fit_blkp = cur_blkp;
+						best_fit = cur_fit;
+					}
+				}
+				cur_blkp = NEXT_FREE_BLKP(cur_blkp);
 			}
-			cur_blkp = NEXT_FREE_BLKP(cur_blkp);
+			// found a good fit, don't need to look in higher free list indices
+			if (best_fit_blkp != NULL)
+				break;
+
+			free_list_index++;
 		}
-		// found a good fit, don't need to look in higher free list indices
-		free_list_index++;
-	}
-	// found a good fit. If not, will extend heap in malloc
-	 //printf("Found nothing, leaving find fit.\n");
-	return NULL;
+		// found a good fit. If not, will extend heap in malloc
+		if (best_fit_blkp != NULL) {
+//			 printf("Found best_fit blkp at index %d at count %d, leaving find fit.\n", free_list_index, count);
+			remove_from_free_list(best_fit_blkp);
+			return best_fit_blkp;
+		}
+		 //printf("Found nothing, leaving find fit.\n");
+		return NULL;
 }
 
 /**********************************************************
@@ -337,69 +378,16 @@ void mm_free(void *bp)
     PUT(FTRP(bp), PACK(size,0));
 
     void *new_bp = bp;
-    //printf("Old bp: %p\n",bp);
     	new_bp = coalesce(bp);
-    	free_counter = 0;
-    //printf("New bp: %p\n",new_bp);
-    // size may be different after coalescing
-    add_to_free_list(new_bp);
-}
-
-
-/**********************************************************
- * mm_malloc
- * Allocate a block of size bytes.
- * The type of search is determined by find_fit
- * The decision of splitting the block, or not is determined
- *   in place(..)
- * If no block satisfies the request, the heap is extended
- **********************************************************/
-void *mm_malloc(size_t size)
-{
-    size_t asize; /* adjusted block size in bytes */
-    size_t extendsize; /* amount to extend heap if no fit */
-    char * bp;
-
-    /* Ignore spurious requests */
-    if (size == 0)
-        return NULL;
-
-    /* Adjust block size to include overhead and alignment reqs. */
-    if (size <= DSIZE)
-        asize = 2 * DSIZE;
-    else
-        asize = DSIZE * ((size + (DSIZE) + (DSIZE-1))/ DSIZE);
-
-	bp = find_fit(asize);
-	if (bp == NULL) {
-		/* No fit found. Get more memory and place the block */
-		extendsize = MAX(asize, CHUNKSIZE);
-		if ((bp = extend_heap(extendsize / WSIZE)) == NULL)
-			return NULL;
-	}
-	int split_size = GET_SIZE(HDRP(bp)) - asize;
-
-	assert(split_size >= 0);
-	assert(!(split_size % DSIZE));
-
-	if (split_size == DSIZE) {
-	// cannot have a free block of size DSIZE, so add it to the allocated block
-		split_size = 0;
-		asize += DSIZE;
-	}
-	else if (split_size > 0) {
-		void *split_bp = bp + asize;
-		// set header and footer of free split block
-		PUT(HDRP(split_bp), PACK(split_size, 0));
-		PUT(FTRP(split_bp), PACK(split_size, 0));
-		add_to_free_list(split_bp);
-		void *coalesced_bp = coalesce(split_bp);
-		// insert into head of linked list at partition_array_pos
-		add_to_free_list(coalesced_bp);
 	}
 
 	// set header and footer of malloc'ed block
 	place(bp, asize);
+	if (split_bp) {
+		void *coalesced_bp = split_bp;
+		coalesced_bp = coalesce(split_bp);
+		add_to_free_list(coalesced_bp);
+	}
     return bp;
 }
 
@@ -409,8 +397,6 @@ void *mm_malloc(size_t size)
  *********************************************************/
 void *mm_realloc(void *ptr, size_t size)
 {
-//	print_free_list(0);
-//	printf("Realloc size = %lu\n",size);
     /* If size == 0 then this is just free, and we return NULL. */
     if(size == 0){
       mm_free(ptr);
@@ -428,48 +414,29 @@ void *mm_realloc(void *ptr, size_t size)
     new_size = DSIZE * ((size + (DSIZE) + (DSIZE-1))/ DSIZE);
     old_size = GET_SIZE(HDRP(oldptr));
 
-    if (new_size == old_size) {
+    if (new_size <= old_size) {
     	return oldptr;
-    } else if (new_size < old_size) {
-    	// can't store a DSIZE sized block so do nothing
-    	if ((old_size - new_size) < DSIZE)
-    		return oldptr;
-
-    	// trim the block
-    	place(oldptr, new_size);
-    	void *new_free_ptr = oldptr + new_size;
-
-    	PUT(HDRP(new_free_ptr), PACK ((old_size - new_size), 0));
-    	PUT(FTRP(new_free_ptr), PACK ((old_size - new_size), 0));
-
-    	add_to_free_list(new_free_ptr);
-    	return oldptr;
-
     }
 
-    void *next_blkptr = NEXT_BLKP(oldptr);
-    	// need to malloc more. Coalesce with next block if free
-	if (!GET_ALLOC(HDRP(next_blkptr))) {
-		size_t combined_size = old_size + GET_SIZE(HDRP(NEXT_BLKP(oldptr)));
-		if (combined_size >= new_size) {
-			remove_from_free_list(next_blkptr);
-			place(oldptr, combined_size);
-			assert(GET_SIZE(HDRP(oldptr)) == combined_size);
-			return oldptr;
-		}
-	}
+    new_size = 1 << get_free_list_index((new_size - DSIZE)>> 3);
 
-//	printf("Mallocing\n");
+//    void *next_blkptr = NEXT_BLKP(oldptr);
+//    	// need to malloc more. Coalesce with next block if free
+//	if (!GET_ALLOC(HDRP(next_blkptr))) {
+//		size_t combined_size = old_size + GET_SIZE(HDRP(NEXT_BLKP(oldptr)));
+//		if (combined_size >= new_size) {
+//			remove_from_free_list(next_blkptr);
+//			place(oldptr, combined_size);
+//			assert(GET_SIZE(HDRP(oldptr)) == combined_size);
+//			return oldptr;
+//		}
+//	}
 
-	newptr = mm_malloc(size);
+	newptr = mm_malloc(new_size);
 	if (newptr == NULL) {
-		// printf("Exiting realloc out of mem\n");
 		return NULL;
 	}
 
-	/* Copy the old data. */
-	if (size < old_size)
-		old_size = size;
 	memcpy(newptr, oldptr, old_size);
 	mm_free(oldptr);
 	return newptr;
@@ -573,30 +540,54 @@ void print_free_list(int free_list_index) {
 
 int get_free_list_index(unsigned int num_words) {
 	//If the size is greater than our largest fit, return the last index
-	if(num_words > (1 << (FREE_LIST_SIZE)))
-		return FREE_LIST_SIZE - 1;
-
-//	if (num_words <= 2) {
-//		return 0;
-//	} else if (num_words <= 6) {
-//		return 1;
-//	} else if (num_words <= 12) {
-//		return 2;
-//	} else if (num_words <= 32) {
-//		return 3;
+//	if(num_words > LARGEST_FIT_SIZE)
+//		return FREE_LIST_SIZE - 1;
+//
+////	if(num_words < (1 << 5))
+////		return 0;
+//
+//	unsigned int num_set_bits =__builtin_popcount(num_words);
+//
+//	if (num_set_bits > 1) {
+//		// not a power of 2. Return one position up
+//		return (sizeof(int) << 3) - __builtin_clz(num_words);
+//	} else if (num_set_bits == 1) {
+//		// is a power of 2. Return this position
+//		return (sizeof(int) << 3) - __builtin_clz(num_words)-1;
+//	} else {
+//		return -1;
 //	}
-
-	unsigned int num_set_bits =__builtin_popcount(num_words);
-
-	if (num_set_bits > 1) {
-		// not a power of 2. Return one position up
-		return (sizeof(int) << 3) - __builtin_clz(num_words);
-	} else if (num_set_bits == 1) {
-		// is a power of 2. Return this position
-		return (sizeof(int) << 3) - __builtin_clz(num_words)-1;
-	} else {
-		return -1;
-	}
+	assert (num_words >= 2);
+	if (num_words > 131072)
+			return 14;
+	else if (num_words > 65536)
+			return 13;
+	else if (num_words > 32768)
+			return 12;
+	else if (num_words > 16384)
+		return 11;
+	else if (num_words > 8192)
+			return 10;
+	else if (num_words > 4096)
+		return 9;
+	else if (num_words > 2048)
+			return 8;
+	else if (num_words > 1024)
+			return 7;
+	else if (num_words > 256)
+			return 6;
+	else if (num_words > 128)
+			return 5;
+	else if (num_words > 64)
+		return 4;
+	else if (num_words > 32)
+		return 3;
+	else if (num_words > 8)
+		return 2;
+	else if (num_words > 4)
+		return 1;
+	else
+		return 0;
 }
 
 void *remove_from_free_list(void *bp) {
@@ -609,7 +600,6 @@ void *remove_from_free_list(void *bp) {
 		prev = cur;
 		cur = NEXT_FREE_BLKP(cur);
 	}
-
 	if (cur == NULL) {
 		return NULL;
 	}

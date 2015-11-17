@@ -89,12 +89,18 @@ int main(int argc, char* argv[]) {
 	// initialize a 16K-entry (2**14) hash of empty lists
 	h.setup(14);
 //	pthread_mutex_t mutex_array[1<<14];
-	int i;
+	int i, j;
 	pthread_t thrd[num_threads];
 
-	for (i = 0; i < num_threads; i++)
-		pthread_create(&thrd[i], NULL, process_samples, (void*)&i);
-
+	for (i = 0; i < num_threads; i++) {
+		int *arg = new int();
+		if (arg == NULL) {
+			fprintf(stderr, "Couldn't allocate memory for thread arg.\n");
+			exit(EXIT_FAILURE);
+		}
+		*arg = i;
+		pthread_create(&thrd[i], NULL, process_samples, arg);
+	}
 	for (i = 0; i < num_threads; i++)
 		pthread_join(thrd[i], NULL);
 
@@ -104,8 +110,8 @@ int main(int argc, char* argv[]) {
 
 void* process_samples(void* p) {
 	int i, j, k, num_seed_streams, stream_init, stream_end, thread_id;
-	thread_id = (*(int *)p);
-	num_seed_streams = NUM_SEED_STREAMS/num_threads;
+	thread_id = (*(int *) p);
+	num_seed_streams = NUM_SEED_STREAMS / num_threads;
 	//printf("Thread %d id is: %d\n", pthread_self(), thread_id);
 	stream_init = num_seed_streams * thread_id;
 	stream_end = num_seed_streams * (thread_id + 1);
@@ -130,14 +136,10 @@ void* process_samples(void* p) {
 
 			// if this sample has not been counted before
 			//pthread_mutex_lock(&mutex_array[]);
-			if (!(s = h.lookup(key))) {
-				// insert a new element for it into the hash table
-				s = new sample(key);
-				h.insert(s);
-			}
-
-			// increment the count for the sample
-			s->count = (s->count + 1);
+			s = h.lookup_and_insert_if_absent(key);
+			s->count++;
+			//printf("Thread %d: COUNT for i: %u INCR to %d\n", thread_id,
+			//		HASH_INDEX(s->key(), ((1 << 14) - 1)), s->count);
 		}
 	}
 	return NULL;

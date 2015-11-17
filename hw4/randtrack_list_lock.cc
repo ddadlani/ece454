@@ -10,7 +10,7 @@
 #include <pthread.h>
 
 #include "defs.h"
-#include "hash.h"
+#include "hash_list_lock.h"
 
 #define SAMPLES_TO_COLLECT   10000000
 #define RAND_NUM_UPPER_BOUND   100000
@@ -88,18 +88,19 @@ int main(int argc, char* argv[]) {
 
 	// initialize a 16K-entry (2**14) hash of empty lists
 	h.setup(14);
-//	pthread_mutex_t mutex_array[1<<14];
-	int i, j;
+	int i;
+
+	// array of threads
 	pthread_t thrd[num_threads];
 
 	for (i = 0; i < num_threads; i++) {
-		int *arg = new int();
-		if (arg == NULL) {
-			fprintf(stderr, "Couldn't allocate memory for thread arg.\n");
+		int *tid = new int();
+		if (tid == NULL) {
+			fprintf(stderr, "Couldn't allocate memory for thread tid.\n");
 			exit(EXIT_FAILURE);
 		}
-		*arg = i;
-		pthread_create(&thrd[i], NULL, process_samples, arg);
+		*tid = i;
+		pthread_create(&thrd[i], NULL, process_samples, tid);
 	}
 	for (i = 0; i < num_threads; i++)
 		pthread_join(thrd[i], NULL);
@@ -112,7 +113,6 @@ void* process_samples(void* p) {
 	int i, j, k, num_seed_streams, stream_init, stream_end, thread_id;
 	thread_id = (*(int *) p);
 	num_seed_streams = NUM_SEED_STREAMS / num_threads;
-	//printf("Thread %d id is: %d\n", pthread_self(), thread_id);
 	stream_init = num_seed_streams * thread_id;
 	stream_end = num_seed_streams * (thread_id + 1);
 	int rnum;
@@ -134,12 +134,9 @@ void* process_samples(void* p) {
 			// force the sample to be within the range of 0..RAND_NUM_UPPER_BOUND-1
 			key = rnum % RAND_NUM_UPPER_BOUND;
 
-			// if this sample has not been counted before
-			//pthread_mutex_lock(&mutex_array[]);
 			s = h.lookup_and_insert_if_absent(key);
+			// increment count
 			s->count++;
-			//printf("Thread %d: COUNT for i: %u INCR to %d\n", thread_id,
-			//		HASH_INDEX(s->key(), ((1 << 14) - 1)), s->count);
 		}
 	}
 	return NULL;

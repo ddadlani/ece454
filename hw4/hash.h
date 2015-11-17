@@ -52,8 +52,8 @@ template<class Ele, class Keytype>
 Ele *
 hash<Ele,Keytype>::lookup(Keytype the_key){
   list<Ele,Keytype> *l;
-  pthread_mutex_lock(&list_locks[HASH_INDEX(the_key,my_size_mask)]);
-  //printf("Thread %d in read lock i : %d\n", pthread_self(), HASH_INDEX(the_key,my_size_mask));
+ // pthread_mutex_lock(&list_locks[HASH_INDEX(the_key,my_size_mask)]);
+  //printf("LOOKUP: Thread %d in lock i : %d\n", pthread_self(), HASH_INDEX(the_key,my_size_mask));
   l = &entries[HASH_INDEX(the_key,my_size_mask)];
   return l->lookup(the_key);
 }  
@@ -90,11 +90,10 @@ void
 hash<Ele,Keytype>::insert(Ele *e){
   //printf("Thread %d before write lock\n", pthread_self());
 //  pthread_mutex_lock(&list_locks[HASH_INDEX(e->key(),my_size_mask)]);
-//  printf("Thread %d in write lock i: %d\n", pthread_self(), HASH_INDEX(e->key(),my_size_mask));
-  entries[HASH_INDEX(e->key(),my_size_mask)].push(e);
-  pthread_mutex_unlock(&list_locks[HASH_INDEX(e->key(),my_size_mask)]);
-  //printf("Thread %d out of write lock\n", pthread_self());
+	//printf("INSERT: Thread %d in lock i: %d\n", pthread_self(), HASH_INDEX(e->key(),my_size_mask));
+//  pthread_mutex_unlock(&list_locks[HASH_INDEX(e->key(),my_size_mask)]);
+  //printf//printfad %d out of write lock\n", pthread_self());
+	entries[HASH_INDEX(e->key(),my_size_mask)].push(e);
 }
-
 
 #endif

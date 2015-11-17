@@ -16,7 +16,7 @@
 #include <pthread.h>
 
 #include "defs.h"
-#include "hash.h"
+#include "hash_element_lock.h"
 
 #define SAMPLES_TO_COLLECT   10000000
 #define RAND_NUM_UPPER_BOUND   100000
@@ -47,6 +47,7 @@ void* process_samples(void* thread_num);
 
 class sample {
 	unsigned my_key;
+	pthread_mutex_t* my_lock;
 public:
 	sample *next;
 	unsigned count;
@@ -54,11 +55,17 @@ public:
 	sample(unsigned the_key) {
 		my_key = the_key;
 		count = 0;
+		my_lock = new pthread_mutex_t();
 	}
 	;
 	unsigned key() {
 		return my_key;
 	}
+
+	pthread_mutex_t* lock() {
+		return my_lock;
+	}
+
 	void print(FILE *f) {
 		printf("%d %d\n", my_key, count);
 	}
@@ -99,13 +106,13 @@ int main(int argc, char* argv[]) {
 	pthread_t thrd[num_threads];
 
 	for (i = 0; i < num_threads; i++) {
-		int *arg = new int();
-		if (arg == NULL) {
-			fprintf(stderr, "Couldn't allocate memory for thread arg.\n");
+		int *tid = new int();
+		if (tid == NULL) {
+			fprintf(stderr, "Couldn't allocate memory for thread id.\n");
 			exit(EXIT_FAILURE);
 		}
-		*arg = i;
-		pthread_create(&thrd[i], NULL, process_samples, arg);
+		*tid = i;
+		pthread_create(&thrd[i], NULL, process_samples, tid);
 	}
 	for (i = 0; i < num_threads; i++)
 		pthread_join(thrd[i], NULL);
@@ -141,11 +148,10 @@ void* process_samples(void* p) {
 			key = rnum % RAND_NUM_UPPER_BOUND;
 
 			// if this sample has not been counted before
-			//pthread_mutex_lock(&mutex_array[]);
 			s = h.lookup_and_insert_if_absent(key);
+
 			s->count++;
-			//printf("Thread %d: COUNT for i: %u INCR to %d\n", thread_id,
-			//		HASH_INDEX(s->key(), ((1 << 14) - 1)), s->count);
+			pthread_mutex_unlock(s->lock());
 		}
 	}
 	return NULL;

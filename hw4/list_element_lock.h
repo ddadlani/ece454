@@ -1,3 +1,9 @@
+/*
+ * list_element_lock.h
+ *
+ *  Created on: 2015-11-16
+ *      Author: saksenag
+ */
 #ifndef LIST_H
 #define LIST_H
 
@@ -25,9 +31,11 @@ public:
 		return my_head;
 	}
 	Ele *lookup(Keytype the_key);
+	Ele *lookup_and_push_if_absent(Keytype the_key);
 
 	void push(Ele *e);
 	Ele *pop();
+
 	void print(FILE *f = stdout);
 
 	void cleanup();
@@ -44,6 +52,7 @@ void list<Ele, Keytype>::push(Ele *e) {
 	e->next = my_head;
 	my_head = e;
 	my_num_ele++;
+	pthread_mutex_unlock(e->lock());
 }
 
 template<class Ele, class Keytype>
@@ -76,6 +85,14 @@ list<Ele, Keytype>::lookup(Keytype the_key) {
 	while (e_tmp && (e_tmp->key() != the_key)) {
 		e_tmp = e_tmp->next;
 	}
+
+	// create a new element
+	if (!e_tmp) {
+		e_tmp = new Ele(the_key);
+	}
+
+	// lock element so that it is not pushed twice
+	pthread_mutex_lock(e_tmp->lock());
 	return e_tmp;
 }
 
@@ -93,4 +110,32 @@ void list<Ele, Keytype>::cleanup() {
 	my_num_ele = 0;
 }
 
+template<class Ele, class Keytype>
+Ele *
+list<Ele, Keytype>::lookup_and_push_if_absent(Keytype the_key) {
+	Ele *e_tmp = my_head;
+
+	while (e_tmp && (e_tmp->key() != the_key)) {
+		e_tmp = e_tmp->next;
+	}
+
+	// create a new element
+	if (!e_tmp) {
+		e_tmp = new Ele(the_key);
+		pthread_mutex_lock(e_tmp->lock());
+		// insert to list
+		e_tmp->next = my_head;
+		my_head = e_tmp;
+		my_num_ele++;
+	} else {
+		pthread_mutex_lock(e_tmp->lock());
+	}
+
+	return e_tmp;
+}
+
 #endif
+
+
+
+

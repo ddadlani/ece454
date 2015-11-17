@@ -1,4 +1,10 @@
 /*
+ * hash_element_lock.h
+ *
+ *  Created on: 2015-11-16
+ *      Author: saksenag
+ */
+/*
  * hash_list_lock.h
  *
  *  Created on: 2015-11-16
@@ -9,7 +15,7 @@
 #define HASH_H
 
 #include <stdio.h>
-#include "list.h"
+#include "list_element_lock.h"
 
 #define HASH_INDEX(_addr,_size_mask) (((_addr) >> 2) & (_size_mask))
 
@@ -22,7 +28,6 @@ private:
 	unsigned my_size_mask;
 	list<Ele, Keytype> *entries;
 	list<Ele, Keytype> *get_list(unsigned the_idx);
-	pthread_mutex_t* list_locks;
 
 public:
 	void setup(unsigned the_size_log = 5);
@@ -39,7 +44,6 @@ void hash<Ele, Keytype>::setup(unsigned the_size_log) {
 	my_size_log = the_size_log;
 	my_size = 1 << my_size_log;
 	my_size_mask = (1 << my_size_log) - 1;
-	list_locks = new pthread_mutex_t[my_size];
 	entries = new list<Ele, Keytype> [my_size];
 }
 
@@ -93,15 +97,14 @@ void hash<Ele, Keytype>::insert(Ele *e) {
 template<class Ele, class Keytype>
 Ele *
 hash<Ele, Keytype>::lookup_and_insert_if_absent(Keytype the_key) {
-	pthread_mutex_lock(&list_locks[HASH_INDEX(the_key, my_size_mask)]);
-	Ele* e;
-	if (!(e = lookup(the_key))) {
-		e = new Ele(the_key);
-		insert(e);
-	}
-	pthread_mutex_unlock(&list_locks[HASH_INDEX(the_key, my_size_mask)]);
-	return e;
+	list<Ele, Keytype> *l;
+	l = &entries[HASH_INDEX(the_key, my_size_mask)];
+	return l->lookup_and_push_if_absent(the_key);
 }
 
 #endif
+
+
+
+
 

@@ -27,7 +27,7 @@ team_t team = { "Basilisk", /* Team name */
 "divya.dadlani@mail.utoronto.ca", /* First member email address */
 
 "Geetika Saksena", /* Second member full name */
-"998672198", /* Second member student number */
+"998672191", /* Second member student number */
 "geetika.saksena@mail.utoronto.ca" /* Second member email address */
 };
 
@@ -37,6 +37,7 @@ unsigned samples_to_skip;
 class sample;
 
 void* process_samples(void* thread_num);
+//int pthread_mutex_lock(pthread_mutex_t *mutex);
 
 class sample {
 	unsigned my_key;
@@ -87,6 +88,7 @@ int main(int argc, char* argv[]) {
 
 	// initialize a 16K-entry (2**14) hash of empty lists
 	h.setup(14);
+//	pthread_mutex_t mutex_array[1<<14];
 	int i;
 	pthread_t thrd[num_threads];
 
@@ -96,12 +98,15 @@ int main(int argc, char* argv[]) {
 	for (i = 0; i < num_threads; i++)
 		pthread_join(thrd[i], NULL);
 
+	// print a list of the frequency of all samples
+	h.print();
 }
 
 void* process_samples(void* p) {
 	int i, j, k, num_seed_streams, stream_init, stream_end, thread_id;
 	thread_id = (*(int *)p);
 	num_seed_streams = NUM_SEED_STREAMS/num_threads;
+	//printf("Thread %d id is: %d\n", pthread_self(), thread_id);
 	stream_init = num_seed_streams * thread_id;
 	stream_end = num_seed_streams * (thread_id + 1);
 	int rnum;
@@ -124,21 +129,17 @@ void* process_samples(void* p) {
 			key = rnum % RAND_NUM_UPPER_BOUND;
 
 			// if this sample has not been counted before
+			//pthread_mutex_lock(&mutex_array[]);
 			if (!(s = h.lookup(key))) {
-
 				// insert a new element for it into the hash table
 				s = new sample(key);
 				h.insert(s);
 			}
 
 			// increment the count for the sample
-			s->count++;
+			s->count = (s->count + 1);
 		}
 	}
-
-	// print a list of the frequency of all samples
-	h.print();
-
 	return NULL;
 }
 

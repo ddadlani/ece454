@@ -19,7 +19,7 @@ team_t team = { "Basilisk", /* Team name */
 "divya.dadlani@mail.utoronto.ca", /* First member email address */
 
 "Geetika Saksena", /* Second member full name */
-"998672198", /* Second member student number */
+"998672191", /* Second member student number */
 "geetika.saksena@mail.utoronto.ca" /* Second member email address */
 };
 

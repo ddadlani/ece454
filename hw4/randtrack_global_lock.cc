@@ -33,8 +33,7 @@ team_t team = {
 
 unsigned num_threads;
 unsigned samples_to_skip;
-unsigned iter_per_thread;
-
+pthread_mutex_t global_mutex = PTHREAD_MUTEX_INITIALIZER;
 class sample;
 
 class sample {
@@ -84,35 +83,55 @@ main (int argc, char* argv[]){
   h.setup(14);
   int thread_id;
   pthread_t threads[4];
-  iter_per_thread = NUM_SEED_STREAMS/num_threads;
-  for (thread_id = 0; thread_id < num_threads; thread_id++) {
-	  pthread_create(&threads[thread_id], NULL, process_streams, &thread_id);
-  }
-  for (thread_id = 0; thread_id < num_threads; thread_id++) {
-  	  pthread_join(threads[thread_id], NULL);
-    }
+  int i;
 
+  	// array of threads
+  	pthread_t thrd[num_threads];
 
+  	for (i = 0; i < num_threads; i++) {
+  		int *tid = new int();
+  		if (tid == NULL) {
+  			fprintf(stderr, "Couldn't allocate memory for thread tid.\n");
+  			exit(EXIT_FAILURE);
+  		}
+  		*tid = i;
+  		pthread_create(&thrd[i], NULL, process_streams, tid);
+  	}
+  	for (i = 0; i < num_threads; i++)
+  		pthread_join(thrd[i], NULL);
+
+  // print a list of the frequency of all samples
+    h.print();
 }
 
 
 void *process_streams(void *thread_id) {
+	pthread_mutex_lock(&global_mutex);
 	  int i,j,k;
 	  int rnum;
 	  unsigned key;
 	  sample *s;
+	  int max_streams = NUM_SEED_STREAMS;
 	  switch (num_threads) {
 	  case 1:
+		  i = 0;
 		  break;
 	  case 2:
+		  i = (*(int *)thread_id == 0) ? 0 : 2;
+		  max_streams = (*(int *)thread_id == 0) ? 2 : 4;
 		  break;
 	  case 3:
+		  // no op
+		  i = 0;
 		  break;
 	  case 4:
+		  i = *(int *)thread_id;
+		  max_streams = i + 1;
 		  break;
 	  }
 // process streams starting with different initial numbers
-  for (i=0; i<NUM_SEED_STREAMS; i++){
+  for (; i < max_streams; i++){
+	  printf("i = %d\n", i);
     rnum = i;
 
     // collect a number of samples
@@ -138,8 +157,8 @@ void *process_streams(void *thread_id) {
       s->count++;
     }
   }
-  // print a list of the frequency of all samples
-    h.print();
+	pthread_mutex_unlock(&global_mutex);
+
   return NULL;
 }
 

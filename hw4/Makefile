@@ -1,6 +1,6 @@
 
 CC = g++-4.9
-CFLAGS = -O3 -lpthread
+CFLAGS = -O0 -lpthread
 
 all: randtrack randtrack_element_lock randtrack_list_lock randtrack_reduction randtrack_global_lock randtrack_tm
 
@@ -23,4 +23,4 @@ randtrack_reduction: list.h hash_reduction.h defs.h randtrack_reduction.cc
 	$(CC) $(CFLAGS) randtrack_reduction.cc -o randtrack_reduction
 
 clean:
-	rm -f *.o randtrack randtrack_global_lock randtrack_tm randtrack_list_lock randtrack_element_lock
+	rm -f *.o randtrack randtrack_global_lock randtrack_tm randtrack_list_lock randtrack_element_lock randtrack_reduction

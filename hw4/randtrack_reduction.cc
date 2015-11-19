@@ -100,10 +100,6 @@ int main(int argc, char* argv[]) {
 
 	for (thread_index = 0; thread_index < num_threads; thread_index++) {
 		int *tid = new int();
-		if (tid == NULL) {
-			fprintf(stderr, "Couldn't allocate memory for thread tid.\n");
-			exit(EXIT_FAILURE);
-		}
 		*tid = thread_index;
 		pthread_create(&thrd[thread_index], NULL, process_samples, tid);
 	}

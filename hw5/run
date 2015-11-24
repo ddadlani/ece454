@@ -1,0 +1,5 @@
+#!/bin/bash
+make clean && make
+initboard $1 $2 > board.in
+gol $3 board.in board.out
+convert board.out board.jpg

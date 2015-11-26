@@ -127,6 +127,10 @@ main (int argc, char* argv[])
   inboard = load_board (input, &nrows, &ncols);
   fclose (input);
 
+  if (nrows > 10000) {
+	  fprintf (stderr, "*** Board size is too large! Board size must not be greater than 10000 x 10000. ***\n");
+	  exit(EXIT_FAILURE);
+  }
   /* Create a second board for ping-ponging */
   outboard = make_board (nrows, ncols);
 

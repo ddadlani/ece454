@@ -3,7 +3,7 @@
 #
 include Makefile.include
 
-LDFLAGS += -lm 
+LDFLAGS += -lm -lpthread
 CPPFLAGS += "-DCOMPILER=\"$(CC)\"" "-DFLAGS=\"$(COPTFLAGS)\""
 
 #
@@ -19,8 +19,8 @@ endif
 
 GOL_EXE = gol
 GOL_VERIFY_EXE = gol_verify
-GOL_OBJS = gol.o life.o lifeseq.o load.o save.o 
-GOL_VERIFY_OBJS = gol.verify.o life.o lifeseq.o load.o save.o 
+GOL_OBJS = gol.o life.o lifeseq.o lifeparallel.o load.o save.o 
+GOL_VERIFY_OBJS = gol.verify.o life.o lifeseq.o lifeparallel.o load.o save.o 
 BITBOARD_EXE = initboard
 BITBOARD_OBJS = bitboard.o random_bit.o
 EXES = $(GOL_EXE) $(BITBOARD_EXE)
@@ -45,6 +45,8 @@ $(BITBOARD_EXE): $(BITBOARD_OBJS)
 	$(CC) -c $(CFLAGS) -DVERIFY_FLAG $(CPPFLAGS) $< -o $@
 
 lifeseq.o: lifeseq.c life.h util.h
+
+lifeparallel.o: lifeparallel.c life.h util.h
 
 life.o: life.c life.h util.h
 

@@ -24,7 +24,7 @@ game_of_life (char* outboard,
 	assert(nrows == ncols);
 	assert((nrows % 2) == 0);
 
-	if (nrows > 32) {
+	if (nrows >= 32) {
 		return parallel_game_of_life (outboard, inboard, nrows, ncols, gens_max);
 	} else
 		return sequential_game_of_life (outboard, inboard, nrows, ncols, gens_max);

@@ -23,6 +23,8 @@ typedef struct arguments {
 	int tid;
 } arguments;
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 void *calculate_status(void *thread_args);
 
 char*
@@ -115,8 +117,12 @@ void *calculate_status(void *thread_args) {
 			BOARD (inboard, isouth, start_col) +
 			BOARD (inboard, isouth, jeast);
 
-			BOARD(outboard, start_row, start_col) = alivep(neighbor_count,
+			 int x= alivep(neighbor_count,
 					BOARD(inboard, start_row, start_col));
+			 BOARD(outboard, start_row, start_col) = x;
+			pthread_mutex_lock(&mutex);
+				printf("TID: %d, (%d,%d): %d\n",tid, start_row, start_col, x);
+			pthread_mutex_unlock(&mutex);
 
 		}
 	}

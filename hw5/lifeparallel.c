@@ -85,7 +85,7 @@ void *calculate_status(void *thread_args) {
 	int dim = ((arguments *) thread_args)->total_nrows;
 	pthread_barrier_t *barrier = ((arguments *) thread_args)->barrier;
 	pthread_mutex_t *mutex = ((arguments *) thread_args)->mutex;
-	int *done = ((arguments *) thread_args)->done;
+	int *ret_count = ((arguments *) thread_args)->done;
 	char **inboard_ptr = ((arguments *) thread_args)->inboard_ptr;
 	char **outboard_ptr = ((arguments *) thread_args)->outboard_ptr;
 	char *inboard, *outboard;
@@ -127,12 +127,12 @@ void *calculate_status(void *thread_args) {
 		outboard = *outboard_ptr;
 
 		pthread_barrier_wait(barrier);
-		pthread_mutex_lock(mutex);
-		if (*(done)) {
-//			printf("TID: %d reset it at curgen %d!\n",tid, curgen);
-			*done = 0;
-		}
-		pthread_mutex_unlock(mutex);
+//		pthread_mutex_lock(mutex);
+//		if (*(done)) {
+////			printf("TID: %d reset it at curgen %d!\n",tid, curgen);
+//			*done = 0;
+//		}
+//		pthread_mutex_unlock(mutex);
 
 		for (i = start_row; i < end_row; i++) {
 			for (j = start_col; j < end_col; j++) {
@@ -160,16 +160,18 @@ void *calculate_status(void *thread_args) {
 			}
 
 		}
-		pthread_barrier_wait(barrier);
-		pthread_mutex_lock(mutex);
-//			printf("TID: %d \n",tid);
-			if (!(*done)) {
+//		pthread_barrier_wait(barrier);
+//		pthread_mutex_lock(mutex);
+////			printf("TID: %d \n",tid);
+//			if (!(*done)) {
 //				printf("TID: %d did it at curgen %d!\n",tid, curgen);
-				SWAP_BOARDS(*outboard_ptr, *inboard_ptr);
-				*done = 1;
-			}
-		pthread_mutex_unlock(mutex);
+				SWAP_BOARDS(outboard, inboard);
+//				*done = 1;
+//			}
+//		pthread_mutex_unlock(mutex);
 
 	}
+	pthread_barrier_wait(barrier);
+	inboard_ptr = &inboard;
 	return NULL;
 }

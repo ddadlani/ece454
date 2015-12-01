@@ -1,5 +1,5 @@
 #!/bin/bash
 make clean && make
-./initboard $1 $1 > board.in
-./gol $2 board.in board.out
-convert board.out board.jpg
+./gol $1 inputs/$2.pbm outputs/$2_par_$1.pbm
+./../orig_hw5/gol $1 inputs/$2.pbm ../orig_hw5/outputs/$2_seq_$1.pbm
+diff outputs/$2_par_$1.pbm ../orig_hw5/outputs/$2_seq_$1.pbm

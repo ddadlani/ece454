@@ -38,7 +38,7 @@ void *calculate_status(void *thread_args);
 char*
 parallel_game_of_life(char* outboard, char* inboard, const int nrows,
 		const int ncols, const int gens_max) {
-	const int num_threads = 4;
+	const int num_threads = 8;
 	pthread_t threads[num_threads];
 	int thread_id[num_threads];
 	char **return_board_ptr[num_threads];
@@ -103,32 +103,66 @@ void *calculate_status(void *thread_args) {
 	int gens_max = ((arguments *) thread_args)->gens_max;
 	int start_row = 0,start_col = 0, end_row = dim, end_col = dim, i, j, curgen;
 
-	switch(tid) {
-	case 0:
-		start_row = 0;
+//	switch(tid) {
+//	case 0:
+//		start_row = 0;
+//		start_col = 0;
+//		end_row = dim >> 1;
+//		end_col = dim >> 1;
+//		break;
+//	case 1:
+//		start_row = 0;
+//		start_col = dim >> 1;
+//		end_row = dim >> 1;
+//		end_col = dim;
+//		break;
+//	case 2:
+//		start_row = dim >> 1;
+//		start_col = 0;
+//		end_row = dim;
+//		end_col = dim >> 1;
+//		break;
+//	case 3:
+//		start_row = dim >> 1;
+//		start_col = dim >> 1;
+//		end_row = dim;
+//		end_col = dim;
+//		break;
+//	}
+
+
+
+	if (!(tid % 2)) {
+		start_col = dim >> 1;
+		end_col = dim;
+	} else {
 		start_col = 0;
-		end_row = dim >> 1;
 		end_col = dim >> 1;
-		break;
+	}
+
+	switch (tid) {
+	case 0:
 	case 1:
 		start_row = 0;
-		start_col = dim >> 1;
-		end_row = dim >> 1;
-		end_col = dim;
+		end_row = dim >> 2;
 		break;
 	case 2:
-		start_row = dim >> 1;
-		start_col = 0;
-		end_row = dim;
-		end_col = dim >> 1;
-		break;
 	case 3:
+		start_row = dim >> 2;
+		end_row = dim >> 1;
+		break;
+	case 4:
+	case 5:
 		start_row = dim >> 1;
-		start_col = dim >> 1;
+		end_row = dim - (dim >> 2);
+		break;
+	case 6:
+	case 7:
+		start_row = dim - (dim >> 2);
 		end_row = dim;
-		end_col = dim;
 		break;
 	}
+
 
 	const int LDA = dim;
 	/* HINT: you'll be parallelizing these loop(s) by doing a
@@ -173,7 +207,7 @@ void *calculate_status(void *thread_args) {
 	char *return_board = NULL;
 	pthread_mutex_lock(mutex);
 		(*return_count)++;
-		if ((*return_count) == 3) {
+		if ((*return_count) == 7) {
 			return_board = inboard;
 		}
 	pthread_mutex_unlock(mutex);

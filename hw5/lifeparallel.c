@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include "life.h"
 #include "util.h"
+#include<assert.h>
 
 /**
  * Swapping the two boards only involves swapping pointers, not
@@ -17,11 +18,14 @@
 #define BOARD( __board, __i, __j )  (__board[(__i) + LDA*(__j)])
 
 typedef struct arguments {
-	char **outboard_ptr;
-	char **inboard_ptr;
+//	char **outboard_ptr;
+//	char **inboard_ptr;
+	char *outboard;
+	char *inboard;
+
 	pthread_barrier_t *barrier;
 	pthread_mutex_t *mutex;
-	int *done;
+	int *return_count;
 	int total_nrows;
 	int tid;
 	int gens_max;
@@ -37,25 +41,29 @@ parallel_game_of_life(char* outboard, char* inboard, const int nrows,
 	const int num_threads = 4;
 	pthread_t threads[num_threads];
 	int thread_id[num_threads];
-//	char *final_board = inboard;
+	char **return_board_ptr[num_threads];
+	char *return_board = NULL;
 	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	pthread_barrier_t barrier; // barrier synchronization object
 	pthread_barrier_init (&barrier, NULL, num_threads);
-	char **outboard_ptr = &outboard;
-	char **inboard_ptr = &inboard;
+//	char **outboard_ptr = &outboard;
+//	char **inboard_ptr = &inboard;
 	/* HINT: in the parallel decomposition, LDA may not be equal to
 	 nrows! */
 	int i;
-	int done_var = 0;
+	int count = -1;
 //	for (curgen = 0; curgen < gens_max; curgen++) {
 		for (i = 0; i < num_threads; i++) {
+			return_board_ptr[i] = (char **)malloc(sizeof(char *));
 			thread_id[i] = i;
 			arguments *thread_args = (arguments *)malloc(1*sizeof(arguments));
-			thread_args->outboard_ptr = outboard_ptr;
-			thread_args->inboard_ptr = inboard_ptr;
+//			thread_args->outboard_ptr = outboard_ptr;
+//			thread_args->inboard_ptr = inboard_ptr;
+			thread_args->outboard = outboard;
+			thread_args->inboard = inboard;
 			thread_args->barrier = &barrier;
 			thread_args->mutex = &mutex;
-			thread_args->done = &done_var;
+			thread_args->return_count = &count;
 			thread_args->total_nrows = nrows;
 			thread_args->tid = thread_id[i];
 			thread_args->gens_max = gens_max;
@@ -63,10 +71,11 @@ parallel_game_of_life(char* outboard, char* inboard, const int nrows,
 
 		}
 
-		for (i = 0; i < num_threads; i++)
-			pthread_join(threads[i], NULL);
-
-
+		for (i = 0; i < num_threads; i++) {
+			pthread_join(threads[i], (void **)return_board_ptr[i]);
+			if (*return_board_ptr[i] != NULL)
+				return_board = *return_board_ptr[i];
+		}
 		// check what outboard is here
 //		SWAP_BOARDS(outboard, inboard);
 //
@@ -77,18 +86,20 @@ parallel_game_of_life(char* outboard, char* inboard, const int nrows,
 	 * Just be careful when you free() the two boards, so that you don't
 	 * free the same one twice!!!
 	 */
-	return *inboard_ptr;
+		assert(return_board != NULL);
+	return return_board;
 }
 
 void *calculate_status(void *thread_args) {
+
+	const int tile_size = 16;
 	int tid = ((arguments *) thread_args)->tid;
 	int dim = ((arguments *) thread_args)->total_nrows;
 	pthread_barrier_t *barrier = ((arguments *) thread_args)->barrier;
 	pthread_mutex_t *mutex = ((arguments *) thread_args)->mutex;
-	int *ret_count = ((arguments *) thread_args)->done;
-	char **inboard_ptr = ((arguments *) thread_args)->inboard_ptr;
-	char **outboard_ptr = ((arguments *) thread_args)->outboard_ptr;
-	char *inboard, *outboard;
+	int *return_count = ((arguments *) thread_args)->return_count;
+	char *inboard = ((arguments *) thread_args)->inboard;
+	char *outboard = ((arguments *) thread_args)->outboard;
 	int gens_max = ((arguments *) thread_args)->gens_max;
 	int start_row = 0,start_col = 0, end_row = dim, end_col = dim, i, j, curgen;
 
@@ -123,55 +134,48 @@ void *calculate_status(void *thread_args) {
 	/* HINT: you'll be parallelizing these loop(s) by doing a
 	 geometric decomposition of the output */
 	for (curgen = 0; curgen < gens_max; curgen++) {
-		inboard = *inboard_ptr;
-		outboard = *outboard_ptr;
 
 		pthread_barrier_wait(barrier);
-//		pthread_mutex_lock(mutex);
-//		if (*(done)) {
-////			printf("TID: %d reset it at curgen %d!\n",tid, curgen);
-//			*done = 0;
-//		}
-//		pthread_mutex_unlock(mutex);
 
-		for (i = start_row; i < end_row; i++) {
-			for (j = start_col; j < end_col; j++) {
-				const int inorth = mod(i - 1, dim);
-				const int isouth = mod(i + 1, dim);
-				const int jwest = mod(j - 1, dim);
-				const int jeast = mod(j + 1, dim);
+		for (i = start_row; i < end_row; i += tile_size) {
+			int ii;
+			for (j = start_col; j < end_col; j += tile_size) {
+				int jj;
+				for (ii = i; (ii < end_row) && (ii < (i + tile_size)); ii++) {
+					const int inorth = mod(ii - 1, dim);
+					const int isouth = mod(ii + 1, dim);
+					for (jj = j; (jj < end_col) && (jj < (j + tile_size));
+							jj++) {
+						const int jwest = mod(jj - 1, dim);
+						const int jeast = mod(jj + 1, dim);
 
-				const char neighbor_count =
-				BOARD(inboard, inorth, jwest) +
-				BOARD (inboard, inorth, j) +
-				BOARD (inboard, inorth, jeast) +
-				BOARD (inboard, i, jwest) +
-				BOARD (inboard, i, jeast) +
-				BOARD (inboard, isouth, jwest) +
-				BOARD (inboard, isouth, j) +
-				BOARD (inboard, isouth, jeast);
+						const char neighbor_count =
+						BOARD(inboard, inorth, jwest) +
+						BOARD (inboard, ii, jwest) +
+						BOARD (inboard, isouth, jwest) +
+						BOARD (inboard, inorth, jj) +
+						BOARD (inboard, isouth, jj) +
+						BOARD (inboard, inorth, jeast) +
+						BOARD (inboard, ii, jeast) +
+						BOARD (inboard, isouth, jeast);
 
-				int x = alivep(neighbor_count, BOARD(inboard, i, j));
-				BOARD(outboard, i, j) = x;
-//				pthread_mutex_lock(mutex);
-//					printf("TID: %d (%d, %d) = %d\n", tid, i, j, x);
-//				pthread_mutex_unlock(mutex);
+						int x = alivep(neighbor_count, BOARD(inboard, ii, jj));
+						BOARD(outboard, ii, jj) = x;
 
+					}
+				}
 			}
 
 		}
-//		pthread_barrier_wait(barrier);
-//		pthread_mutex_lock(mutex);
-////			printf("TID: %d \n",tid);
-//			if (!(*done)) {
-//				printf("TID: %d did it at curgen %d!\n",tid, curgen);
-				SWAP_BOARDS(outboard, inboard);
-//				*done = 1;
-//			}
-//		pthread_mutex_unlock(mutex);
+				SWAP_BOARDS(outboard,inboard);
 
 	}
-	pthread_barrier_wait(barrier);
-	inboard_ptr = &inboard;
-	return NULL;
+	char *return_board = NULL;
+	pthread_mutex_lock(mutex);
+		(*return_count)++;
+		if ((*return_count) == 3) {
+			return_board = inboard;
+		}
+	pthread_mutex_unlock(mutex);
+	return return_board;
 }

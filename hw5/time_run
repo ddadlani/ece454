@@ -1,0 +1,5 @@
+#!/bin/bash
+make clean && make
+/usr/bin/time -f "%e real" ./gol $1 inputs/$2.pbm outputs/$2_par_$1.pbm
+/usr/bin/time -f "%e real" ./../orig_hw5/gol $1 inputs/$2.pbm ../orig_hw5/outputs/$2_seq_$1.pbm
+diff outputs/$2_par_$1.pbm ../orig_hw5/outputs/$2_seq_$1.pbm

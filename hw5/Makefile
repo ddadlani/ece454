@@ -4,7 +4,6 @@
 include Makefile.include
 
 LDFLAGS += -lm -lpthread
-CFLAGS += -O3
 CPPFLAGS += "-DCOMPILER=\"$(CC)\"" "-DFLAGS=\"$(COPTFLAGS)\""
 #CPPFLAGS += "-DCOMPILER=\"$(CC)\"" "-DFLAGS=\"-O0\""
 #

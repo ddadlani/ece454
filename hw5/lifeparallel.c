@@ -18,11 +18,8 @@
 #define BOARD( __board, __i, __j )  (__board[(__i) + LDA*(__j)])
 
 typedef struct arguments {
-//	char **outboard_ptr;
-//	char **inboard_ptr;
 	char *outboard;
 	char *inboard;
-
 	pthread_barrier_t *barrier;
 	pthread_mutex_t *mutex;
 	int *return_count;
@@ -43,19 +40,12 @@ parallel_game_of_life(char* outboard, char* inboard, const int nrows, const int 
 	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	pthread_barrier_t barrier; // barrier synchronization object
 	pthread_barrier_init(&barrier, NULL, num_threads);
-//	char **outboard_ptr = &outboard;
-//	char **inboard_ptr = &inboard;
-	/* HINT: in the parallel decomposition, LDA may not be equal to
-	 nrows! */
 	int i;
 	int count = -1;
-//	for (curgen = 0; curgen < gens_max; curgen++) {
 	for (i = 0; i < num_threads; i++) {
 		return_board_ptr[i] = (char **) malloc(sizeof(char *));
 		thread_id[i] = i;
 		arguments *thread_args = (arguments *) malloc(1 * sizeof(arguments));
-//			thread_args->outboard_ptr = outboard_ptr;
-//			thread_args->inboard_ptr = inboard_ptr;
 		thread_args->outboard = outboard;
 		thread_args->inboard = inboard;
 		thread_args->barrier = &barrier;
@@ -73,10 +63,6 @@ parallel_game_of_life(char* outboard, char* inboard, const int nrows, const int 
 		if (*return_board_ptr[i] != NULL)
 			return_board = *return_board_ptr[i];
 	}
-	// check what outboard is here
-//		SWAP_BOARDS(outboard, inboard);
-//
-//	}
 	/*
 	 * We return the output board, so that we know which one contains
 	 * the final result (because we've been swapping boards around).
@@ -137,8 +123,6 @@ void *calculate_status(void *thread_args) {
 	}
 
 	const int LDA = dim;
-	/* HINT: you'll be parallelizing these loop(s) by doing a
-	 geometric decomposition of the output */
 	for (curgen = 0; curgen < gens_max; curgen++) {
 
 		pthread_barrier_wait(barrier);

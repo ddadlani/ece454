@@ -163,7 +163,9 @@ void *calculate_status(void *thread_args) {
 						BOARD (inboard, ii, jeast) +
 						BOARD (inboard, isouth, jeast);
 
-						BOARD(outboard, ii, jj) = alivep(neighbor_count, BOARD(inboard, ii, jj));
+						char state = BOARD(inboard, ii, jj);
+						BOARD(outboard, ii, jj) = (neighbor_count == (char) 3) ||
+							    (state && (neighbor_count >= 2) && (neighbor_count <= 3));
 					}
 				}
 			}

@@ -9,7 +9,7 @@
  * toroidal boundary conditions.
  */
 static inline int 
-mod (int x, int m)
+wrap_mod (int x, int m)
 {
 //  return (x < 0) ? ((x % m) + m) : (x % m);
 	if (x > -1 && x < m) {

@@ -5,6 +5,16 @@
 #include "util.h"
 #include<assert.h>
 
+/**************************************************************
+ * This file contains the parallel implementation of the game
+ * of life.
+ *
+ * Authors: Divya Dadlani
+ * 			Geetika Saksena
+ * 			(Team Basilisk)
+ *************************************************************/
+
+
 /**
  * Swapping the two boards only involves swapping pointers, not
  * copying values.
@@ -15,8 +25,15 @@
   b2 = temp; \
 } while(0)
 
+/**
+ * The macro which returns the status of cell (i, j) on the board.
+ */
 #define BOARD( __board, __i, __j )  (__board[(__i) + LDA*(__j)])
 
+/**
+ * A structure which holds the arguments necessary for multithreading
+ * and synchronization
+ */
 typedef struct arguments {
 	char *outboard;
 	char *inboard;
@@ -28,20 +45,35 @@ typedef struct arguments {
 	int gens_max;
 } arguments;
 
-void *calculate_status(void *thread_args);
+void *evaluate_board(void *thread_args);
 
+/**
+ * Parallel implementation of the 'sequential_game_of_life'
+ * function using 8 threads.
+ *
+ * Takes the following parameters:
+ *  -pointers to the inboard and outboard
+ *  -number of rows and columns
+ *  -total number of iterations for which to run
+ *
+ *  Returns a pointer to the final board after running
+ *  the game of life algorithm for gens_max iterations.
+ */
 char*
 parallel_game_of_life(char* outboard, char* inboard, const int nrows, const int ncols, const int gens_max) {
+	/* Thread generation variables */
 	const int num_threads = 8;
 	pthread_t threads[num_threads];
 	int thread_id[num_threads];
 	char **return_board_ptr[num_threads];
-	char *return_board = NULL;
 	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	pthread_barrier_t barrier; // barrier synchronization object
 	pthread_barrier_init(&barrier, NULL, num_threads);
+
+	char *return_board = NULL;
 	int i;
 	int count = -1;
+	/* Create the threads and run board evaluation */
 	for (i = 0; i < num_threads; i++) {
 		return_board_ptr[i] = (char **) malloc(sizeof(char *));
 		thread_id[i] = i;
@@ -54,38 +86,52 @@ parallel_game_of_life(char* outboard, char* inboard, const int nrows, const int 
 		thread_args->total_nrows = nrows;
 		thread_args->tid = thread_id[i];
 		thread_args->gens_max = gens_max;
-		pthread_create(&threads[i], NULL, calculate_status, (void *) thread_args);
+		pthread_create(&threads[i], NULL, evaluate_board, (void *) thread_args);
 
 	}
 
+	/* Join all the threads and find the board to return */
 	for (i = 0; i < num_threads; i++) {
 		pthread_join(threads[i], (void **) return_board_ptr[i]);
 		if (*return_board_ptr[i] != NULL)
 			return_board = *return_board_ptr[i];
 	}
-	/*
-	 * We return the output board, so that we know which one contains
-	 * the final result (because we've been swapping boards around).
-	 * Just be careful when you free() the two boards, so that you don't
-	 * free the same one twice!!!
-	 */
 	assert(return_board != NULL);
 	return return_board;
 }
 
-void *calculate_status(void *thread_args) {
+/**
+ * Evaluates the status of cells in one part of the board
+ * for all iterations.
+ *
+ * This function is called 8 times (i.e. by each thread) and
+ * is synchronized using a barrier before each iteration and
+ * a lock before returning the final outcome.
+ *
+ * Takes a struct of thread arguments which it uses to
+ * calculate the bounds within which each thread operates.
+ * The struct also passes in synchronization variables that
+ * are shared by all threads.
+ *
+ * Returns the complete evaluated board.
+ */
+void *evaluate_board(void *thread_args) {
 
-	const int tile_size = 32;
-	int tid = ((arguments *) thread_args)->tid;
-	int dim = ((arguments *) thread_args)->total_nrows;
+	/* Synchronization variables */
+	int *return_count = ((arguments *) thread_args)->return_count;
 	pthread_barrier_t *barrier = ((arguments *) thread_args)->barrier;
 	pthread_mutex_t *mutex = ((arguments *) thread_args)->mutex;
-	int *return_count = ((arguments *) thread_args)->return_count;
+
+	/* Bound calculation variables */
+	int tid = ((arguments *) thread_args)->tid;
+	int dim = ((arguments *) thread_args)->total_nrows;
 	char *inboard = ((arguments *) thread_args)->inboard;
 	char *outboard = ((arguments *) thread_args)->outboard;
 	int gens_max = ((arguments *) thread_args)->gens_max;
+
 	int start_row, start_col, end_row, end_col, i, j, curgen;
 
+	/* Assign start and end bounds for each thread */
 	if (tid % 2) {
 		start_row = 0;
 		end_row = dim >> 1;
@@ -122,9 +168,12 @@ void *calculate_status(void *thread_args) {
 		end_col = dim;
 	}
 
+	/* Evaluate board */
+	const int tile_size = 32;
 	const int LDA = dim;
 	for (curgen = 0; curgen < gens_max; curgen++) {
 
+		/* All threads must wait before starting a new generation */
 		pthread_barrier_wait(barrier);
 
 		for (i = start_row; i < end_row; i += tile_size) {
@@ -132,11 +181,12 @@ void *calculate_status(void *thread_args) {
 			for (j = start_col; j < end_col; j += tile_size) {
 				int jj;
 				for (ii = i; (ii < end_row) && (ii < (i + tile_size)); ii++) {
-					int inorth = mod(ii - 1, dim);
-					int isouth = mod(ii + 1, dim);
+					int inorth = wrap_mod(ii - 1, dim);
+					int isouth = wrap_mod(ii + 1, dim);
 					for (jj = j; (jj < end_col) && (jj < (j + tile_size)); jj++) {
-						int jwest = mod(jj - 1, dim);
-						int jeast = mod(jj + 1, dim);
+						int jwest = wrap_mod(jj - 1, dim);
+						int jeast = wrap_mod(jj + 1, dim);
+
 						char neighbor_count =
 						BOARD(inboard, inorth, jwest) +
 						BOARD (inboard, ii, jwest) +
@@ -158,6 +208,8 @@ void *calculate_status(void *thread_args) {
 		SWAP_BOARDS(outboard, inboard);
 
 	}
+	/* Ensure that only the last thread returns
+	 * the final evaluated board */
 	char *return_board = NULL;
 	pthread_mutex_lock(mutex);
 		(*return_count)++;

@@ -127,6 +127,7 @@ main (int argc, char* argv[])
   inboard = load_board (input, &nrows, &ncols);
   fclose (input);
 
+  /* Print an error and return if nrows is too large */
   if (nrows > 10000) {
 	  fprintf (stderr, "*** Board size is too large! Board size must not be greater than 10000 x 10000. ***\n");
 	  exit(EXIT_FAILURE);

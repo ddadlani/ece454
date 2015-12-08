@@ -5,6 +5,7 @@ include Makefile.include
 
 LDFLAGS += -lm -lpthread
 CPPFLAGS += "-DCOMPILER=\"$(CC)\"" "-DFLAGS=\"$(COPTFLAGS)\""
+CFLAGS += -O3
 #CPPFLAGS += "-DCOMPILER=\"$(CC)\"" "-DFLAGS=\"-O0\""
 #
 # Include the realtime clock library, if required.

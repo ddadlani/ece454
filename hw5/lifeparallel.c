@@ -131,7 +131,23 @@ void *evaluate_board(void *thread_args) {
 
 	int start_row, start_col, end_row, end_col, i, j, curgen;
 
-	/* Assign start and end bounds for each thread */
+	/* Assign start and end bounds for each thread
+	 * The board is divided into 8 segments as follows:
+	 * _____________________
+	 * |    |    |    |    |
+	 * |    |    |    |    |
+	 * |    |    |    |    |
+	 * |    |	 |	  |	   |
+	 * |____|____|____|____|
+	 * |    |    |    |	   |
+	 * |    |    |    |	   |
+	 * |    |    |    |	   |
+	 * |    |    |    |	   |
+	 * |____|____|____|____|
+	 *
+	 * Each thread runs the game of life computation on
+	 * one of these segments.
+	 */
 	if (tid % 2) {
 		start_row = 0;
 		end_row = dim >> 1;
